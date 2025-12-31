@@ -15,6 +15,7 @@ const DEFAULT_CONFIG: OllamaConfig = {
   baseUrl: 'http://localhost:11434/api',
   defaultModel: 'llama2',
   timeoutMs: 30000,
+  autoPlan: true, // Enable automatic planning by default
 };
 
 /**
@@ -67,7 +68,7 @@ export async function saveConfig(config: Partial<OllamaConfig>): Promise<void> {
 /**
  * Get a specific configuration value
  */
-export async function getConfigValue(key: keyof OllamaConfig): Promise<string | number> {
+export async function getConfigValue(key: keyof OllamaConfig): Promise<string | number | boolean | undefined> {
   const config = await loadConfig();
   return config[key];
 }
@@ -77,17 +78,17 @@ export async function getConfigValue(key: keyof OllamaConfig): Promise<string | 
  */
 export async function setConfigValue(
   key: keyof OllamaConfig,
-  value: string | number
+  value: string | number | boolean
 ): Promise<void> {
   const config = await loadConfig();
 
   // Validate and convert value based on key
   if (key === 'timeoutMs') {
     const numValue = typeof value === 'string' ? parseInt(value, 10) : value;
-    if (isNaN(numValue) || numValue <= 0) {
+    if (isNaN(numValue as number) || (numValue as number) <= 0) {
       throw new Error('timeoutMs must be a positive integer');
     }
-    config[key] = numValue;
+    config[key] = numValue as number;
   } else if (key === 'baseUrl') {
     const urlValue = String(value);
     try {
@@ -96,8 +97,11 @@ export async function setConfigValue(
     } catch {
       throw new Error('baseUrl must be a valid URL');
     }
+  } else if (key === 'autoPlan') {
+    const boolValue = typeof value === 'string' ? value.toLowerCase() === 'true' : Boolean(value);
+    config[key] = boolValue;
   } else {
-    config[key] = String(value);
+    config[key] = String(value) as never;
   }
 
   await saveConfig(config);

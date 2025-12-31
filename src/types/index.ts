@@ -6,6 +6,7 @@ export interface OllamaConfig {
   baseUrl: string;
   defaultModel: string;
   timeoutMs: number;
+  autoPlan?: boolean | undefined; // Enable automatic planning for complex tasks
 }
 
 export interface Message {

@@ -14,6 +14,11 @@ import { configCommand } from './commands/config.js';
 import { assistantCommand } from './commands/assistant.js';
 import { initCommand } from './commands/init.js';
 import { writeCommand } from './commands/write.js';
+import { templateCommand } from './commands/template.js';
+import { exportCommand } from './commands/export.js';
+import { importCommand } from './commands/import.js';
+import { gitCommand } from './commands/git.js';
+import { planCommand } from './commands/plan.js';
 
 const program = new Command();
 
@@ -85,6 +90,56 @@ program
   .description('Manage AI assistants')
   .action(async (command, args) => {
     await assistantCommand(command, ...args);
+  });
+
+// Template command
+program
+  .command('template <command> [args...]')
+  .description('Manage prompt templates')
+  .option('-c, --category <category>', 'Filter by category (code|documentation|git|general)')
+  .action(async (command, args, options) => {
+    await templateCommand(command, args, options);
+  });
+
+// Export command
+program
+  .command('export <session-id>')
+  .description('Export conversation to file')
+  .option('-f, --format <format>', 'Export format (json|markdown|txt)', 'markdown')
+  .option('-o, --output <path>', 'Output file path')
+  .option('--pretty', 'Pretty print JSON')
+  .action(async (sessionId, options) => {
+    await exportCommand(sessionId, options);
+  });
+
+// Import command
+program
+  .command('import <file>')
+  .description('Import conversation from file')
+  .option('-n, --name <name>', 'Session name')
+  .option('-f, --format <format>', 'File format (json|markdown)')
+  .action(async (file, options) => {
+    await importCommand(file, options);
+  });
+
+// Git command
+program
+  .command('git <command>')
+  .description('Git workflow helpers')
+  .option('-m, --model <model>', 'Model to use')
+  .option('--style <style>', 'Commit message style (conventional|simple)', 'conventional')
+  .option('--auto-commit', 'Auto-commit after generating message')
+  .option('--base <branch>', 'Base branch for PR (default: main)')
+  .action(async (command, options) => {
+    await gitCommand(command, options);
+  });
+
+// Plan command
+program
+  .command('plan <command> [args...]')
+  .description('Manage execution plans')
+  .action(async (command, args) => {
+    await planCommand(command, args);
   });
 
 // Init command

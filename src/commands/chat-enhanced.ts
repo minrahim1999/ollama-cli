@@ -24,6 +24,7 @@ import {
   displayCodingAssistantWelcome,
   displayError,
   displaySuccess,
+  displayInfo,
   displayModels,
   displayAssistantMessageStart,
   displayAssistantMessageEnd,
@@ -46,6 +47,16 @@ import {
   cleanOldSnapshots,
 } from '../memory/index.js';
 import { compareSnapshots, formatFullDiff } from '../memory/diff.js';
+import { getTemplate, renderTemplate } from '../templates/index.js';
+import { parseVariables } from './template.js';
+import { displayUserMessage } from '../ui/display.js';
+import { exportSession } from '../export/index.js';
+import type { ExportFormat } from '../types/export.js';
+import { isGitRepository, getStagedDiff } from '../git/index.js';
+import { GIT_TEMPLATES } from '../templates/git-templates.js';
+import type { CommitStyle } from '../types/git.js';
+import { shouldTriggerPlanning } from '../planning/detector.js';
+import { createPlan, listPlans } from '../planning/index.js';
 
 interface ChatOptions {
   model?: string;
@@ -460,6 +471,72 @@ async function handleCommand(
       await performCleanup();
       break;
 
+    case 'template': {
+      if (args.length === 0) {
+        displayError('Usage: /template <name> [key=value...]');
+        console.log('');
+        console.log(colors.secondary('Example:'));
+        console.log(`  ${colors.tertiary('/template code-review filename=app.ts language=typescript')}`);
+        console.log('');
+        console.log(colors.secondary('List templates:'));
+        console.log(`  ${colors.tertiary('ollama-cli template list')}`);
+      } else {
+        await handleTemplateCommand(args);
+      }
+      break;
+    }
+
+    case 'export': {
+      const format = (args[0] || 'markdown') as ExportFormat;
+      const filename = args[1];
+
+      if (!['json', 'markdown', 'txt'].includes(format)) {
+        displayError('Invalid format. Use: json, markdown, or txt');
+        break;
+      }
+
+      try {
+        const filePath = await exportSession(session, format, filename);
+        displaySuccess(`Exported to: ${filePath}`);
+      } catch (error) {
+        displayError(
+          error instanceof Error ? error.message : 'Failed to export'
+        );
+      }
+      break;
+    }
+
+    case 'commit': {
+      const style = (args[0] || 'conventional') as CommitStyle;
+      await handleCommitCommand(session, client, style);
+      break;
+    }
+
+    case 'review': {
+      await handleReviewCommand(session, client);
+      break;
+    }
+
+    case 'plan': {
+      if (args.length === 0) {
+        displayError('Usage: /plan <task-description>');
+        console.log('');
+        console.log(colors.secondary('Example:'));
+        console.log(`  ${colors.tertiary('/plan Add user authentication with JWT')}`);
+        console.log('');
+        console.log(colors.secondary('Or use:'));
+        console.log(`  ${colors.tertiary('/plans - List all plans')}`);
+      } else {
+        await handlePlanCommand(session, client, args.join(' '));
+      }
+      break;
+    }
+
+    case 'plans': {
+      await handleListPlansCommand();
+      break;
+    }
+
     case 'stats':
       if (toolExecutor) {
         displayToolStats(toolExecutor);
@@ -474,7 +551,7 @@ async function handleCommand(
       console.log(chalk.grey('\nGoodbye!'));
       process.exit(0);
       // No break needed as process.exit() terminates
-
+      // eslint-disable-next-line no-fallthrough
     default:
       displayError(`Unknown command: /${cmd}`, 'Type /help to see available commands');
       break;
@@ -515,10 +592,28 @@ function displayEnhancedHelp(toolsEnabled: boolean): void {
   console.log(`  ${colors.brand.primary('/cleanup')}       ${colors.tertiary('Clean old snapshots')}`);
   console.log('');
 
+  console.log(colors.secondary(`${symbols.circle} Templates & Export`));
+  console.log('');
+  console.log(`  ${colors.brand.primary('/template <name>')} ${colors.tertiary('Use prompt template')}`);
+  console.log(`  ${colors.brand.primary('/export [format]')} ${colors.tertiary('Export conversation')}`);
+  console.log('');
+
+  console.log(colors.secondary(`${symbols.circle} Planning`));
+  console.log('');
+  console.log(`  ${colors.brand.primary('/plan <task>')}     ${colors.tertiary('Create implementation plan')}`);
+  console.log(`  ${colors.brand.primary('/plans')}           ${colors.tertiary('List all plans')}`);
+  console.log('');
+
+  console.log(colors.secondary(`${symbols.circle} Git Workflow`));
+  console.log('');
+  console.log(`  ${colors.brand.primary('/commit [style]')}  ${colors.tertiary('Generate commit message')}`);
+  console.log(`  ${colors.brand.primary('/review')}          ${colors.tertiary('Review staged changes')}`);
+  console.log('');
+
   console.log(colors.secondary(`${symbols.circle} Other`));
   console.log('');
-  console.log(`  ${colors.brand.primary('/help')}          ${colors.tertiary('Show this help')}`);
-  console.log(`  ${colors.brand.primary('/models')}        ${colors.tertiary('List models')}`);
+  console.log(`  ${colors.brand.primary('/help')}            ${colors.tertiary('Show this help')}`);
+  console.log(`  ${colors.brand.primary('/models')}          ${colors.tertiary('List models')}`);
   console.log('');
 }
 
@@ -690,4 +785,379 @@ function displayToolStats(executor: ToolExecutor): void {
     }
   }
   console.log('');
+}
+
+/**
+ * Handle /template command in REPL
+ */
+async function handleTemplateCommand(args: string[]): Promise<void> {
+  try {
+    const templateName = args[0];
+    if (!templateName) {
+      displayError('Template name required');
+      return;
+    }
+
+    const template = await getTemplate(templateName);
+    if (!template) {
+      displayError(`Template not found: ${templateName}`);
+      console.log('');
+      console.log(colors.secondary('List templates:'));
+      console.log(`  ${colors.tertiary('ollama-cli template list')}`);
+      console.log('');
+      return;
+    }
+
+    // Parse variables from remaining args
+    const variables = parseVariables(args.slice(1));
+
+    // Check if all required variables are provided
+    const missingVars = template.variables.filter((v) => !(v in variables));
+
+    if (missingVars.length > 0) {
+      displayError(`Missing variables: ${missingVars.join(', ')}`);
+      console.log('');
+      console.log(colors.secondary('Usage:'));
+      console.log(
+        `  ${colors.tertiary(`/template ${templateName} ${template.variables.map((v) => `${v}=value`).join(' ')}`)}`
+      );
+      console.log('');
+      return;
+    }
+
+    // Render template
+    const rendered = renderTemplate(template, variables);
+
+    // Display as user message
+    console.log('');
+    displayUserMessage(rendered);
+    console.log('');
+
+    displaySuccess('Template rendered. You can now send this as your message.');
+    console.log(colors.tertiary('Tip: Press Enter to send, or edit first'));
+    console.log('');
+  } catch (error) {
+    displayError(
+      error instanceof Error ? error.message : 'Failed to use template'
+    );
+  }
+}
+
+/**
+ * Handle /commit command in REPL
+ */
+async function handleCommitCommand(
+  session: ChatSession,
+  client: OllamaClient,
+  style: CommitStyle
+): Promise<void> {
+  try {
+    // Check if in git repo
+    const isGit = await isGitRepository();
+    if (!isGit) {
+      displayError('Not a git repository');
+      return;
+    }
+
+    // Get staged diff
+    const diff = await getStagedDiff();
+
+    if (!diff || diff.trim() === '') {
+      displayError('No staged changes found');
+      console.log('');
+      console.log(colors.secondary('Stage files first:'));
+      console.log(`  ${colors.tertiary('git add <files>')}`);
+      console.log('');
+      return;
+    }
+
+    const styleGuide =
+      style === 'conventional'
+        ? GIT_TEMPLATES.COMMIT_MESSAGE_CONVENTIONAL
+        : GIT_TEMPLATES.COMMIT_MESSAGE_SIMPLE;
+
+    // Build prompt
+    const prompt = GIT_TEMPLATES.COMMIT_MESSAGE.replace('{{diff}}', diff)
+      .replace(/\{\{style\}\}/g, style)
+      .replace('{{styleGuide}}', styleGuide);
+
+    console.log('');
+    console.log(gradients.brand('Generating Commit Message'));
+    console.log('');
+    console.log(colors.secondary('Analyzing staged changes...'));
+    console.log('');
+
+    // Add message to session
+    await addMessage(session, {
+      role: 'user',
+      content: 'Generate a commit message for my staged changes.',
+    });
+
+    let fullResponse = '';
+
+    for await (const chunk of client.chat({
+      model: session.model,
+      messages: [
+        ...session.messages,
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+    })) {
+      process.stdout.write(chunk);
+      fullResponse += chunk;
+    }
+
+    console.log('\n');
+
+    // Add assistant response to session
+    await addMessage(session, {
+      role: 'assistant',
+      content: fullResponse,
+    });
+
+    console.log(colors.tertiary('Copy the message above to use for your commit'));
+    console.log(colors.secondary('To commit:'));
+    console.log(`  ${colors.brand.primary('git commit -m "<message>"')}`);
+    console.log('');
+  } catch (error) {
+    displayError(
+      error instanceof Error ? error.message : 'Failed to generate commit message'
+    );
+  }
+}
+
+/**
+ * Handle /review command in REPL
+ */
+async function handleReviewCommand(
+  session: ChatSession,
+  client: OllamaClient
+): Promise<void> {
+  try {
+    // Check if in git repo
+    const isGit = await isGitRepository();
+    if (!isGit) {
+      displayError('Not a git repository');
+      return;
+    }
+
+    // Get staged diff
+    const diff = await getStagedDiff();
+
+    if (!diff || diff.trim() === '') {
+      displayError('No staged changes found');
+      console.log('');
+      console.log(colors.secondary('Stage files first:'));
+      console.log(`  ${colors.tertiary('git add <files>')}`);
+      console.log('');
+      return;
+    }
+
+    // Build prompt
+    const prompt = GIT_TEMPLATES.CODE_REVIEW.replace('{{diff}}', diff);
+
+    console.log('');
+    console.log(gradients.brand('Code Review'));
+    console.log('');
+    console.log(colors.secondary('Reviewing staged changes...'));
+    console.log('');
+
+    // Add message to session
+    await addMessage(session, {
+      role: 'user',
+      content: 'Review my staged changes.',
+    });
+
+    let fullResponse = '';
+
+    for await (const chunk of client.chat({
+      model: session.model,
+      messages: [
+        ...session.messages,
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+    })) {
+      process.stdout.write(chunk);
+      fullResponse += chunk;
+    }
+
+    console.log('\n');
+
+    // Add assistant response to session
+    await addMessage(session, {
+      role: 'assistant',
+      content: fullResponse,
+    });
+  } catch (error) {
+    displayError(
+      error instanceof Error ? error.message : 'Failed to review changes'
+    );
+  }
+}
+
+/**
+ * Handle /plan command in REPL
+ */
+async function handlePlanCommand(
+  session: ChatSession,
+  client: OllamaClient,
+  taskDescription: string
+): Promise<void> {
+  try {
+    console.log('');
+    console.log(gradients.brand('Creating Plan'));
+    console.log('');
+    console.log(colors.secondary('Analyzing task complexity...'));
+    console.log('');
+
+    const detection = shouldTriggerPlanning(taskDescription);
+
+    console.log(
+      `${colors.tertiary(`Complexity: ${detection.confidence} confidence`)}`
+    );
+    console.log(`${colors.tertiary(`Reason: ${detection.reason}`)}`);
+    console.log('');
+
+    // Create plan
+    const plan = await createPlan({
+      name: taskDescription.substring(0, 50) + (taskDescription.length > 50 ? '...' : ''),
+      description: taskDescription,
+      userRequest: taskDescription,
+      sessionId: session.id,
+      workingDirectory: process.cwd(),
+      model: session.model,
+    });
+
+    console.log(colors.success('Plan created!'));
+    console.log('');
+    console.log(colors.secondary('Plan Details:'));
+    console.log(`  ${colors.tertiary(`ID: ${plan.id.substring(0, 8)}...`)}`);
+    console.log(`  ${colors.tertiary(`Name: ${plan.name}`)}`);
+    console.log('');
+
+    // Ask LLM to break down into steps
+    console.log(colors.secondary('Generating implementation steps...'));
+    console.log('');
+
+    const planningPrompt = `Break down this task into implementation steps:
+
+Task: ${taskDescription}
+
+Create a detailed plan with:
+1. Exploration steps (analyze existing code)
+2. Implementation steps (create/modify files)
+3. Testing steps
+
+For each step, specify:
+- Title (brief, action-oriented)
+- Description (detailed explanation)
+- Type (explore, create, modify, delete, execute, test)
+- Estimated complexity (low, medium, high)
+- Files involved (if applicable)
+
+Format as a numbered list.`;
+
+    await addMessage(session, {
+      role: 'user',
+      content: 'Create a plan for: ' + taskDescription,
+    });
+
+    let fullResponse = '';
+
+    for await (const chunk of client.chat({
+      model: session.model,
+      messages: [
+        ...session.messages,
+        {
+          role: 'system',
+          content:
+            'You are a software architect creating implementation plans. Be specific and actionable.',
+        },
+        {
+          role: 'user',
+          content: planningPrompt,
+        },
+      ],
+    })) {
+      process.stdout.write(chunk);
+      fullResponse += chunk;
+    }
+
+    console.log('\n');
+
+    await addMessage(session, {
+      role: 'assistant',
+      content: fullResponse,
+    });
+
+    console.log(colors.success('Plan steps generated!'));
+    console.log('');
+    console.log(colors.secondary('Next Steps:'));
+    console.log(`  ${colors.brand.primary(`ollama-cli plan show ${plan.id.substring(0, 8)}...`)} - View full plan`);
+    console.log(`  ${colors.tertiary('Plan saved to: ~/.ollama-cli/plans/' + plan.id + '.md')}`);
+    console.log('');
+  } catch (error) {
+    displayError(
+      error instanceof Error ? error.message : 'Failed to create plan'
+    );
+  }
+}
+
+/**
+ * Handle /plans command in REPL
+ */
+async function handleListPlansCommand(): Promise<void> {
+  try {
+    const plans = await listPlans();
+
+    if (plans.length === 0) {
+      displayInfo('No plans found');
+      console.log('');
+      console.log(colors.secondary('Create a plan:'));
+      console.log(`  ${colors.tertiary('/plan <task-description>')}`);
+      console.log('');
+      return;
+    }
+
+    console.log('');
+    console.log(gradients.brand('Execution Plans'));
+    console.log('');
+
+    for (const plan of plans.slice(0, 5)) {
+      const statusIcon =
+        plan.status === 'completed' ? '✅' :
+        plan.status === 'in-progress' ? '🔄' :
+        plan.status === 'approved' ? '👍' :
+        plan.status === 'cancelled' ? '❌' :
+        '📝';
+
+      const progress = `${plan.completedSteps}/${plan.totalSteps}`;
+
+      console.log(`${statusIcon} ${colors.brand.primary(plan.name)}`);
+      console.log(`   ${colors.tertiary(plan.description)}`);
+      console.log(
+        `   ${colors.dim(`ID: ${plan.id.substring(0, 8)}... | ${plan.status} | ${progress}`)}`
+      );
+      console.log('');
+    }
+
+    if (plans.length > 5) {
+      console.log(colors.tertiary(`... and ${plans.length - 5} more`));
+      console.log('');
+    }
+
+    console.log(colors.secondary('Commands:'));
+    console.log(`  ${colors.brand.primary('ollama-cli plan list')} - View all plans`);
+    console.log(`  ${colors.brand.primary('ollama-cli plan show <id>')} - View plan details`);
+    console.log('');
+  } catch (error) {
+    displayError(
+      error instanceof Error ? error.message : 'Failed to list plans'
+    );
+  }
 }
