@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "projectName": "LLM-cli",
+  "permissions": {
+    "canReadFiles": true,
+    "canWriteFiles": true,
+    "canExecuteCommands": true,
+    "grantedAt": "2025-12-31T18:42:52.312Z"
+  },
+  "metadata": {},
+  "createdAt": "2025-12-31T18:42:52.316Z",
+  "updatedAt": "2025-12-31T18:42:52.316Z"
+}

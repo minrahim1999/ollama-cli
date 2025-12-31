@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "colors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "hex": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["primary", "secondary", "tertiary"]
+          }
+        },
+        "required": ["name", "hex", "category"]
+      }
+    }
+  },
+  "required": ["colors"]
+}
