@@ -157,6 +157,34 @@ export const TOOL_DEFINITIONS: Record<ToolName, ToolDefinition> = {
     needsSnapshot: false,
   },
 
+  execute_code: {
+    name: 'execute_code',
+    description: 'Execute code in various languages (Python, JavaScript, TypeScript, Shell)',
+    parameters: [
+      {
+        name: 'language',
+        type: 'string',
+        description: 'Programming language (python|javascript|typescript|shell)',
+        required: true,
+      },
+      {
+        name: 'code',
+        type: 'string',
+        description: 'Code to execute',
+        required: true,
+      },
+      {
+        name: 'timeout',
+        type: 'number',
+        description: 'Timeout in milliseconds (default: 30000)',
+        required: false,
+        default: 30000,
+      },
+    ],
+    dangerous: true,
+    needsSnapshot: false,
+  },
+
   copy_file: {
     name: 'copy_file',
     description: 'Copy a file or directory',

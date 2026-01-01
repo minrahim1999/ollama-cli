@@ -14,6 +14,7 @@ import type {
   ListDirectoryParams,
   SearchFilesParams,
   BashParams,
+  ExecuteCodeParams,
   CopyFileParams,
   MoveFileParams,
   DeleteFileParams,
@@ -303,6 +304,83 @@ export async function executeBash(params: BashParams): Promise<ToolCallResult> {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to execute command',
+      data: errorData,
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+/**
+ * Execute code in various languages
+ */
+export async function executeCode(params: ExecuteCodeParams): Promise<ToolCallResult> {
+  try {
+    const timeout = params.timeout ?? 30000;
+    let command: string;
+    let tempFile: string | undefined;
+
+    // Build command based on language
+    switch (params.language) {
+      case 'python':
+        command = `python3 -c ${JSON.stringify(params.code)}`;
+        break;
+
+      case 'javascript':
+        command = `node -e ${JSON.stringify(params.code)}`;
+        break;
+
+      case 'typescript':
+        // TypeScript requires writing to a temp file and using tsx or ts-node
+        tempFile = path.join('/tmp', `temp-${Date.now()}.ts`);
+        await fs.writeFile(tempFile, params.code, 'utf-8');
+        command = `npx tsx ${tempFile}`;
+        break;
+
+      case 'shell':
+        command = params.code;
+        break;
+
+      default:
+        return {
+          success: false,
+          error: `Unsupported language: ${params.language}`,
+          timestamp: new Date().toISOString(),
+        };
+    }
+
+    const { stdout, stderr } = await execAsync(command, {
+      timeout,
+      maxBuffer: 1024 * 1024 * 10, // 10MB
+    });
+
+    // Clean up temp file if created
+    if (tempFile) {
+      await fs.unlink(tempFile).catch(() => {
+        /* ignore */
+      });
+    }
+
+    return {
+      success: true,
+      data: {
+        language: params.language,
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+        code: params.code.substring(0, 200), // Truncate for response
+      },
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error) {
+    const errorData =
+      error instanceof Error && 'stdout' in error && 'stderr' in error
+        ? {
+            stdout: String((error as { stdout: unknown }).stdout || ''),
+            stderr: String((error as { stderr: unknown }).stderr || ''),
+          }
+        : undefined;
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to execute code',
       data: errorData,
       timestamp: new Date().toISOString(),
     };

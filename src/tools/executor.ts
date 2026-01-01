@@ -16,6 +16,7 @@ import type {
   ListDirectoryParams,
   SearchFilesParams,
   BashParams,
+  ExecuteCodeParams,
   CopyFileParams,
   MoveFileParams,
   DeleteFileParams,
@@ -29,6 +30,7 @@ import {
   listDirectory,
   searchFiles,
   executeBash,
+  executeCode,
   copyFile,
   moveFile,
   deleteFile,
@@ -152,6 +154,8 @@ export class ToolExecutor {
         return searchFiles(request.parameters as unknown as SearchFilesParams);
       case 'bash':
         return executeBash(request.parameters as unknown as BashParams);
+      case 'execute_code':
+        return executeCode(request.parameters as unknown as ExecuteCodeParams);
       case 'copy_file':
         return copyFile(request.parameters as unknown as CopyFileParams);
       case 'move_file':

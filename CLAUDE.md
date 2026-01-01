@@ -4,16 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Ollama CLI is a professional command-line interface for Ollama (local LLM models), similar to Claude Code but powered by local models. It provides interactive chat, file operations via MCP tools, automatic snapshot/rollback, templates, planning, and git integration.
+Ollama CLI is a professional command-line interface for Ollama (local LLM models), similar to Claude Code but powered by local models. It provides interactive chat, file operations via MCP tools, automatic snapshot/rollback, templates, planning, git integration, workflow automation, database tools, RAG system, API testing, and comprehensive productivity enhancements.
 
 **Key Features:**
-- Interactive REPL with 25+ MCP tools (read/write files, execute commands, git operations)
+- Interactive REPL with 26+ MCP tools (read/write files, execute code, commands, git operations)
 - 6 specialized AI assistants (File Writer, Coding Assistant, Code Reviewer, etc.)
 - Automatic snapshot system for file changes with undo/revert capability
 - Template library with 5 built-in templates and variable substitution
 - Conversation export/import (JSON, Markdown, TXT)
 - AI-powered git workflow (commit messages, PR summaries, code review)
 - Full-featured planning system with auto-detection and step-by-step execution
+- Code execution tool (Python, JavaScript, TypeScript, Shell)
+- Model comparison for side-by-side testing
+- Pipe mode for integrating with unix commands
+- Syntax highlighting for code blocks
+- Keyboard shortcuts (Ctrl+K/L, Ctrl+U, etc.)
+- **Codebase indexing** with fuzzy symbol search
+- **Test integration** with AI failure analysis
+- **Workflow automation** with YAML-based workflows (NEW)
+- **Database tools** for SQLite queries and schema inspection (NEW)
+- **RAG system** with vector embeddings and semantic search (NEW)
+- **API testing** with HTTP client and response validation (NEW)
 - Project-aware context via `.ollama` directory
 - Modern gradient-based UI with clean typography
 
@@ -45,8 +56,8 @@ npm run build && node dist/cli.js chat --tools
 1. **CLI Entry** (`src/cli.ts`) - Routes commands via Commander.js
 2. **Commands** (`src/commands/`) - Command handlers (chat, ask, config, etc.)
 3. **Core Systems** - Business logic layers:
-   - `src/api/` - Ollama API client with streaming
-   - `src/tools/` - MCP tool registry & executor
+   - `src/api/` - Ollama API client with streaming + HTTP client for API testing
+   - `src/tools/` - MCP tool registry & executor (26 tools including execute_code)
    - `src/memory/` - Snapshot system (SHA-256 hashing)
    - `src/session/` - Conversation persistence
    - `src/assistants/` - Assistant management
@@ -55,7 +66,12 @@ npm run build && node dist/cli.js chat --tools
    - `src/export/` - Conversation export/import (JSON, Markdown, TXT)
    - `src/git/` - Git operations wrapper
    - `src/planning/` - Planning system with auto-detection and execution
-4. **UI Layer** (`src/ui/`) - Display functions with gradient support (pure, no state mutation)
+   - `src/indexing/` - Codebase indexing and symbol search
+   - `src/testing/` - Test runner and failure analysis
+   - `src/workflows/` - YAML workflow executor (NEW)
+   - `src/database/` - SQLite client and schema inspection (NEW)
+   - `src/rag/` - Vector embeddings and similarity search (NEW)
+4. **UI Layer** (`src/ui/`) - Display functions with gradient & syntax highlighting support (pure, no state mutation)
 
 ### Tool System Architecture
 
@@ -79,6 +95,7 @@ export async function readFile(params): Promise<string>
 
 **Tool Categories:**
 - **File System** (10 tools): read_file, write_file, edit_file, glob, tree, etc.
+- **Code Execution** (2 tools): bash, execute_code (Python, JS, TS, Shell)
 - **Code Analysis** (3 tools): analyze_code, find_symbol, get_imports
 - **Git** (5 tools): git_status, git_diff, git_log, git_branch, git_commit
 - **Project** (3 tools): npm_info, npm_install, run_script
@@ -324,3 +341,369 @@ Or modify `getDefaultAssistants()` for built-in assistants.
 **Tool results showing raw JSON:**
 - Use `summarizeToolResult()` to condense output for display
 - LLM still receives full JSON, user sees summary
+
+## Quick-Win Features (v2.1.0)
+
+### Code Execution Tool
+
+**Implementation:** `src/tools/implementations.ts` - `executeCode()`
+
+The execute_code tool runs code in multiple languages:
+- **Python**: Uses `python3 -c`
+- **JavaScript**: Uses `node -e`
+- **TypeScript**: Writes temp file, uses `npx tsx`
+- **Shell**: Direct execution
+
+**Safety:**
+- Marked as dangerous (requires confirmation)
+- 30s timeout default
+- Captures stdout/stderr
+- Auto-cleanup of temp files
+
+### Model Comparison
+
+**Implementation:** `src/commands/compare.ts`
+
+Compares multiple models in parallel:
+- Executes requests simultaneously
+- Displays side-by-side with syntax highlighting
+- Shows timing, response length metrics
+- Default models: configured + llama3.1 + mistral
+
+**Usage Pattern:**
+```bash
+ollama-cli compare "prompt" --models model1,model2,model3
+```
+
+### Pipe Mode
+
+**Implementation:** `src/commands/ask.ts` - `readStdin()`
+
+Detects when stdin is not a TTY and reads piped data:
+- 100ms timeout for detection
+- Prepends stdin data to prompt
+- Enables unix pipeline integration
+
+**Common patterns:**
+```bash
+git diff | ollama-cli ask "review"
+cat log.txt | ollama-cli ask "summarize"
+```
+
+### Syntax Highlighting
+
+**Implementation:** `src/ui/syntax.ts`
+
+Simple chalk-based highlighting:
+- Extracts code blocks with regex: `/```(\w+)?\n([\s\S]*?)```/g`
+- Language-specific keyword highlighting
+- String, number, comment, function call detection
+- Applied in: compare command, future streaming enhancements
+
+**Pattern:**
+```typescript
+const highlighted = highlightText(response);
+// Returns text with ANSI color codes
+```
+
+### Keyboard Shortcuts
+
+**Implementation:** `src/commands/chat-enhanced.ts` - `setupKeyboardShortcuts()`
+
+Uses readline keypress events:
+- Enables raw mode for TTY
+- Listens for Ctrl+K/L (clear screen)
+- Ctrl+U clears current line
+- Only activates in interactive terminals
+
+**Key Handling:**
+```typescript
+process.stdin.on('keypress', (chunk, key) => {
+  if (key.ctrl && key.name === 'k') {
+    console.clear();
+    rl.prompt();
+  }
+});
+```
+
+## High-Impact Features (v2.2.0)
+
+### Codebase Indexing
+
+**Implementation:** `src/indexing/`
+
+**Architecture:**
+- `parser.ts` - Regex-based symbol extraction for TS/JS/Python
+- `index.ts` - Index builder, storage, and search engine  
+- `commands/index-cmd.ts` - CLI command handler
+
+**Index Structure:**
+```typescript
+interface CodebaseIndex {
+  version: string;
+  indexedAt: string;
+  projectRoot: string;
+  files: FileIndex[];  // Per-file symbols, imports, exports
+  totalSymbols: number;
+  totalFiles: number;
+}
+```
+
+**Symbol Types:**
+- Functions (including arrow functions)
+- Classes  
+- Interfaces
+- Type aliases
+- Constants, let, var declarations
+
+**Search Algorithm:**
+- Exact match: score 1.0
+- Starts with: score 0.8
+- Contains: score 0.6
+- Fuzzy match: score 0.4
+
+**Storage:** `~/.ollama-cli/index/codebase-index.json`
+
+**Commands:**
+```bash
+ollama-cli index build    # Build if needed
+ollama-cli index rebuild  # Force rebuild
+ollama-cli index stats    # Show statistics
+/index build              # REPL command
+/search MyClass           # REPL search
+```
+
+### Test Integration
+
+**Implementation:** `src/testing/runner.ts`
+
+**Framework Detection:**
+1. Check devDependencies (vitest, jest, mocha)
+2. Check package.json test script
+3. Check for pytest.ini
+4. Fallback to npm test
+
+**Test Parsers:**
+- **Jest/Vitest**: Parses `● test name` blocks
+- **Mocha**: Parses numbered failure blocks
+- **Pytest**: Parses `FAILED file::test` format
+- **Generic**: Fallback for unknown formats
+
+**Output Parsing:**
+- Extracts test names, errors, stack traces
+- Counts passed/failed/skipped
+- Measures duration
+- Returns structured TestResult
+
+**AI Integration:**
+- Automatically sends failures to AI
+- Formats up to 3 failures for analysis
+- AI explains errors and suggests fixes
+- Reduces context switching
+
+**Usage:**
+```bash
+/test  # Run tests and get AI analysis
+```
+
+**Benefit:**  
+Integrates TDD workflow directly into AI chat, making test failures instantly actionable with AI-powered explanations.
+
+## New Advanced Features (v2.3.0)
+
+### Workflow Automation
+
+**Implementation:** `src/workflows/executor.ts`, `src/commands/workflow.ts`
+
+**Storage:** `.ollama/workflows/*.yml`
+
+**Workflow Structure:**
+```yaml
+name: Workflow Name
+description: Description
+variables:  # Optional
+  VAR_NAME: value
+steps:
+  - name: Step name
+    type: bash|test|index|git|file|ai
+    command: command to execute
+    continueOnError: true  # Optional
+```
+
+**Step Types:**
+- `bash`: Execute shell command (uses execAsync)
+- `test`: Run test suite (uses src/testing/runner.ts)
+- `index`: Build codebase index (uses src/indexing/index.ts)
+- `git`: Execute git command (prefixes with "git ")
+- `file`: Read file contents
+- `ai`: AI prompt (placeholder for future)
+
+**Variable Substitution:**
+- `${variable}` format in commands
+- `$variable` format also supported
+
+**Execution Flow:**
+1. Load YAML workflow from `.ollama/workflows/`
+2. Execute steps sequentially
+3. Stop on error unless `continueOnError: true`
+4. Track timing for each step
+5. Return WorkflowResult with all step results
+
+**Commands:**
+```bash
+ollama-cli workflow list         # List workflows in .ollama/workflows/
+ollama-cli workflow show deploy  # Show workflow details
+ollama-cli workflow run deploy   # Execute workflow
+```
+
+### Database Tools
+
+**Implementation:** `src/database/sqlite.ts`, `src/commands/database.ts`
+
+**Library:** better-sqlite3
+
+**Features:**
+- Execute SQL queries (SELECT, INSERT, UPDATE, DELETE)
+- Schema inspection (tables, views, columns, indexes)
+- Foreign key relationship detection
+- Table row counting
+- Query performance metrics
+
+**SQLiteClient Methods:**
+```typescript
+query(sql: string, params: unknown[]): QueryResult
+getSchema(): SchemaInfo
+getTableInfo(tableName: string): TableInfo
+```
+
+**Commands:**
+```bash
+ollama-cli database query "SELECT * FROM users" --file ./db.db
+ollama-cli database schema --file ./db.db
+ollama-cli database tables --file ./db.db
+ollama-cli database describe users --file ./db.db
+```
+
+**Default Database:** `./database.db` (use --file to override)
+
+### RAG System
+
+**Implementation:** `src/rag/index.ts`, `src/rag/embeddings.ts`, `src/commands/rag.ts`
+
+**Storage:** `~/.ollama-cli/rag/vector-store.json`
+
+**Embedding Model:** nomic-embed-text (default, configurable)
+
+**Architecture:**
+1. **Embeddings:** Generate vectors using Ollama's `/embeddings` API
+2. **Vector Store:** In-memory JSON store with metadata
+3. **Similarity Search:** Cosine similarity (dot product / magnitudes)
+
+**Document Structure:**
+```typescript
+{
+  id: UUID,
+  content: string,
+  metadata: {
+    source: file path or manual,
+    type: code|documentation|text,
+    language: typescript|python|etc,
+    createdAt: ISO timestamp,
+    size: number
+  },
+  embedding: number[]  // 768 dimensions for nomic-embed-text
+}
+```
+
+**Similarity Scoring:**
+- Range: 0-1 (1 = identical, 0 = orthogonal)
+- Default min score: 0.5
+- Uses cosine similarity formula
+
+**Batch Processing:**
+- Embeddings generated in batches of 5 concurrent requests
+- Progress callbacks for large codebase indexing
+
+**Commands:**
+```bash
+ollama-cli rag add "text" --type documentation
+ollama-cli rag add --file README.md
+ollama-cli rag search "query" --topk 5 --min-score 0.5
+ollama-cli rag index  # Index entire codebase
+ollama-cli rag stats
+ollama-cli rag clear
+```
+
+**Use Cases:**
+- Semantic code search
+- Documentation retrieval
+- Context for AI from large codebases
+- Foundation for advanced RAG features
+
+### API Testing
+
+**Implementation:** `src/api/http.ts`, `src/commands/api.ts`
+
+**HTTP Client:** Native fetch API
+
+**Features:**
+- Execute HTTP requests (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)
+- Custom headers support
+- JSON and raw body support
+- Response validation with multiple rule types
+- Test suite execution from JSON files
+- Performance metrics
+
+**Validation Rules:**
+```typescript
+{
+  type: 'status' | 'header' | 'body' | 'json-path' | 'schema',
+  field?: string,  // For header or json-path
+  operator: 'equals' | 'contains' | 'matches' | 'exists' | 'gt' | 'lt',
+  value?: unknown
+}
+```
+
+**Validation Types:**
+- **Status:** Validate HTTP status code (equals, gt, lt)
+- **Header:** Check header existence or value (exists, equals, contains)
+- **Body:** Search body text (contains, matches regex)
+- **JSON Path:** Validate JSON fields (exists, equals) - supports dot notation
+- **Schema:** Basic schema validation (placeholder)
+
+**Commands:**
+```bash
+ollama-cli api request https://example.com/api/users
+ollama-cli api request https://example.com/api \
+  --method POST \
+  --header "Authorization: Bearer token" \
+  --data '{"key": "value"}' \
+  --timeout 10000
+
+ollama-cli api test tests.json
+```
+
+**Test File Format:**
+```json
+[
+  {
+    "name": "Test Name",
+    "request": {
+      "url": "https://example.com/api",
+      "method": "GET",
+      "headers": {},
+      "body": {}
+    },
+    "validation": [
+      { "type": "status", "operator": "equals", "value": 200 }
+    ]
+  }
+]
+```
+
+**Output:**
+- Colored status codes (green <300, yellow <500, red >=500)
+- Full headers display
+- JSON pretty-printing
+- Request duration in milliseconds
+- Test results with pass/fail icons

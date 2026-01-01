@@ -10,6 +10,7 @@ export type ToolName =
   | 'list_directory'
   | 'search_files'
   | 'bash'
+  | 'execute_code'
   | 'copy_file'
   | 'move_file'
   | 'delete_file'
@@ -79,6 +80,12 @@ export interface BashParams {
   command: string;
   timeout?: number;
   cwd?: string;
+}
+
+export interface ExecuteCodeParams {
+  language: 'python' | 'javascript' | 'typescript' | 'shell';
+  code: string;
+  timeout?: number;
 }
 
 export interface CopyFileParams {

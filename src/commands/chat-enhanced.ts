@@ -67,6 +67,38 @@ interface ChatOptions {
   assistant?: string; // Assistant ID to use
 }
 
+/**
+ * Set up custom keyboard shortcuts for readline
+ */
+function setupKeyboardShortcuts(rl: readline.Interface): void {
+  // Enable keypress events
+  if (process.stdin.isTTY) {
+    readline.emitKeypressEvents(process.stdin, rl);
+    if (process.stdin.setRawMode) {
+      process.stdin.setRawMode(true);
+    }
+
+    process.stdin.on('keypress', (_chunk, key) => {
+      if (!key) return;
+
+      // Ctrl+K or Ctrl+L: Clear screen
+      if (key.ctrl && (key.name === 'k' || key.name === 'l')) {
+        console.clear();
+        rl.prompt();
+      }
+
+      // Ctrl+U: Clear current line
+      if (key.ctrl && key.name === 'u') {
+        (rl as unknown as { line: string }).line = '';
+        rl.prompt();
+        // Force cursor to beginning
+        process.stdout.write('\r\x1b[K');
+        rl.prompt();
+      }
+    });
+  }
+}
+
 export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
   const config = await getEffectiveConfig();
   const model = options.model || config.defaultModel;
@@ -183,6 +215,9 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
     output: process.stdout,
     prompt: chalk.cyan('You: '),
   });
+
+  // Set up custom keyboard shortcuts
+  setupKeyboardShortcuts(rl);
 
   let isProcessing = false;
   let isExiting = false;
@@ -537,6 +572,33 @@ async function handleCommand(
       break;
     }
 
+    case 'index': {
+      if (args.length === 0) {
+        displayError('Usage: /index build|rebuild|stats');
+        displayInfo('Build searchable codebase index for better context');
+      } else {
+        const { indexCommand } = await import('./index-cmd.js');
+        await indexCommand(args[0] as 'build' | 'rebuild' | 'stats', args.slice(1));
+      }
+      break;
+    }
+
+    case 'search': {
+      if (args.length === 0) {
+        displayError('Usage: /search <symbol-name> [--type function|class|interface]');
+        displayInfo('Search codebase index for symbols');
+      } else {
+        await handleSearchCommand(args);
+      }
+      break;
+    }
+
+    case 'test': {
+      displayInfo('Running tests...');
+      await handleTestCommand(session, client);
+      break;
+    }
+
     case 'stats':
       if (toolExecutor) {
         displayToolStats(toolExecutor);
@@ -555,6 +617,138 @@ async function handleCommand(
     default:
       displayError(`Unknown command: /${cmd}`, 'Type /help to see available commands');
       break;
+  }
+}
+
+/**
+ * Handle test command
+ */
+async function handleTestCommand(session: ChatSession, client: OllamaClient): Promise<void> {
+  const { runTests } = await import('../testing/runner.js');
+
+  try {
+    startSpinner('Running tests...');
+    const result = await runTests(process.cwd(), { framework: 'auto' });
+    stopSpinner();
+
+    console.log('');
+    console.log(gradients.brand('Test Results'));
+    console.log('');
+
+    const icon = result.failed > 0 ? '❌' : '✅';
+    console.log(`${icon} ${colors.brand.primary(`${result.passed}/${result.total} tests passed`)} ${colors.dim(`(${result.duration}ms)`)}`);
+
+    if (result.skipped > 0) {
+      console.log(colors.tertiary(`   ${result.skipped} skipped`));
+    }
+
+    if (result.failed > 0) {
+      console.log('');
+      console.log(colors.error(`${result.failed} test${result.failed > 1 ? 's' : ''} failed:`));
+      console.log('');
+
+      for (let i = 0; i < Math.min(result.failures.length, 5); i++) {
+        const failure = result.failures[i]!;
+        console.log(colors.secondary(`  ${i + 1}. ${failure.test}`));
+        console.log(`     ${colors.error(failure.error.split('\n')[0]!)}`);
+      }
+
+      if (result.failures.length > 5) {
+        console.log(colors.dim(`\n   ... and ${result.failures.length - 5} more`));
+      }
+
+      console.log('');
+      console.log(colors.tertiary('Asking AI to analyze failures...'));
+
+      // Add test failures to session for AI analysis
+      const failuresSummary = result.failures
+        .slice(0, 3)
+        .map((f, i) => `${i + 1}. ${f.test}\n   Error: ${f.error}`)
+        .join('\n\n');
+
+      await addMessage(session, {
+        role: 'user',
+        content: `I ran tests and ${result.failed} failed. Here are the failures:\n\n${failuresSummary}\n\nCan you help me understand what's wrong and how to fix it?`,
+      });
+
+      // Stream AI response
+      displayAssistantMessageStart();
+      let fullResponse = '';
+
+      for await (const chunk of client.chat({
+        model: session.model,
+        messages: session.messages,
+      })) {
+        process.stdout.write(chunk);
+        fullResponse += chunk;
+      }
+
+      console.log('');
+
+      await addMessage(session, {
+        role: 'assistant',
+        content: fullResponse,
+      });
+
+      displayAssistantMessageEnd();
+    } else {
+      console.log('');
+      console.log(colors.success('All tests passed!'));
+      console.log('');
+    }
+  } catch (error) {
+    stopSpinner();
+    displayError(error instanceof Error ? error.message : 'Failed to run tests');
+  }
+}
+
+/**
+ * Handle search command
+ */
+async function handleSearchCommand(args: string[]): Promise<void> {
+  const { loadIndex, searchSymbols } = await import('../indexing/index.js');
+
+  try {
+    const index = await loadIndex();
+    if (!index) {
+      displayError('No index found', 'Run: /index build');
+      return;
+    }
+
+    const query = args[0]!;
+    const results = searchSymbols(index, query, { limit: 10 });
+
+    if (results.length === 0) {
+      displayInfo(`No symbols found matching: ${query}`);
+      return;
+    }
+
+    console.log('');
+    console.log(gradients.brand(`Search Results: ${query}`));
+    console.log('');
+
+    for (const result of results) {
+      const { symbol, score } = result;
+      const scorePercent = Math.round(score * 100);
+      const icon =
+        symbol.type === 'function' ? '𝑓' :
+        symbol.type === 'class' ? 'C' :
+        symbol.type === 'interface' ? 'I' :
+        symbol.type === 'type' ? 'T' :
+        'V';
+
+      console.log(`${colors.brand.primary(icon)} ${colors.secondary(symbol.name)} ${colors.dim(`(${scorePercent}% match)`)}`);
+      console.log(`   ${colors.tertiary(symbol.file)}:${symbol.line}`);
+      if (symbol.signature) {
+        console.log(`   ${colors.dim(symbol.signature)}`);
+      }
+      console.log('');
+    }
+
+    console.log(colors.dim(`Found ${results.length} symbol${results.length > 1 ? 's' : ''}`));
+    console.log('');
+  } catch (error) {
+    displayError(error instanceof Error ? error.message : 'Failed to search');
   }
 }
 
@@ -602,6 +796,18 @@ function displayEnhancedHelp(toolsEnabled: boolean): void {
   console.log('');
   console.log(`  ${colors.brand.primary('/plan <task>')}     ${colors.tertiary('Create implementation plan')}`);
   console.log(`  ${colors.brand.primary('/plans')}           ${colors.tertiary('List all plans')}`);
+  console.log('');
+
+  console.log(colors.secondary(`${symbols.circle} Codebase Indexing`));
+  console.log('');
+  console.log(`  ${colors.brand.primary('/index build')}     ${colors.tertiary('Build codebase index')}`);
+  console.log(`  ${colors.brand.primary('/index stats')}     ${colors.tertiary('Show index statistics')}`);
+  console.log(`  ${colors.brand.primary('/search <name>')}   ${colors.tertiary('Search for symbols')}`);
+  console.log('');
+
+  console.log(colors.secondary(`${symbols.circle} Testing`));
+  console.log('');
+  console.log(`  ${colors.brand.primary('/test')}            ${colors.tertiary('Run tests with AI analysis')}`);
   console.log('');
 
   console.log(colors.secondary(`${symbols.circle} Git Workflow`));

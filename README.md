@@ -49,13 +49,30 @@ A professional, feature-rich command-line interface for Ollama - chat with AI mo
 - **Git Integration**: Seamless workflow with git commands
 - **Conventional Commits**: Support for standardized commit formats
 
-### 🎯 Planning System (NEW!)
+### 🎯 Planning System
 - **Smart Detection**: Auto-detect complex tasks requiring planning
 - **Implementation Plans**: Break down tasks into actionable steps
 - **Step-by-Step Execution**: Track progress through plan stages
 - **Plan Storage**: Save plans in JSON + Markdown formats
 - **Progress Tracking**: Monitor completion status and step results
 - **Auto-Planning**: Enabled by default for complex requests
+
+### ⚡ Quick-Win Features
+- **Code Execution**: Run Python, JavaScript, TypeScript, and Shell code snippets directly in chat
+- **Model Comparison**: Compare responses from multiple models side-by-side with performance metrics
+- **Pipe Mode**: Pipe command output directly to ask command (`git diff | ollama-cli ask "review"`)
+- **Syntax Highlighting**: Automatic code block highlighting with language-specific colors
+- **Keyboard Shortcuts**: Ctrl+K/L (clear screen), Ctrl+U (clear line), and more
+
+### 🚀 High-Impact Features
+- **Codebase Indexing**: Build searchable index of all functions, classes, and symbols with fuzzy search
+- **Test Integration**: Run tests with automatic AI analysis of failures (Vitest, Jest, Mocha, Pytest)
+
+### 🎯 Advanced Features (NEW!)
+- **Workflow Automation**: Define and execute YAML-based multi-step workflows
+- **Database Tools**: Execute SQL queries and inspect SQLite database schemas
+- **RAG System**: Vector embeddings for semantic search and context retrieval
+- **API Testing**: HTTP client with response validation and test suites
 
 ## Installation
 
@@ -144,9 +161,16 @@ Options:
 *Other:*
 - `/models` - List available models
 
+**Keyboard Shortcuts:**
+- `Ctrl+K` or `Ctrl+L` - Clear screen (keeps conversation history)
+- `Ctrl+U` - Clear current line
+- `Ctrl+D` - Exit chat session
+- `Ctrl+R` - Reverse search command history
+- `Ctrl+C` - Cancel current input
+
 ### `ask`
 
-Get a one-shot response without starting an interactive session.
+Get a one-shot response without starting an interactive session. Supports piping input from stdin.
 
 ```bash
 ollama-cli ask <prompt> [options]
@@ -156,6 +180,45 @@ Options:
   --json <schema>         Generate JSON matching the schema file
   --raw                   Output raw response without formatting
   --system <message>      Set system prompt
+```
+
+**Pipe Mode Examples:**
+```bash
+# Review git changes
+git diff | ollama-cli ask "review these changes"
+
+# Analyze error logs
+cat error.log | ollama-cli ask "what's causing this error?"
+
+# Explain test failures
+npm test 2>&1 | ollama-cli ask "explain these failures"
+
+# Debug command output
+docker logs myapp | ollama-cli ask "find errors"
+```
+
+### `compare`
+
+Compare responses from multiple models side-by-side.
+
+```bash
+ollama-cli compare <prompt> [options]
+
+Options:
+  --models <models>       Comma-separated list of models
+  --system <message>      Set system prompt
+```
+
+**Examples:**
+```bash
+# Compare 3 models
+ollama-cli compare "Explain async/await" --models llama3.1,mistral,codellama
+
+# Use default models (configured + llama3.1 + mistral)
+ollama-cli compare "What is recursion?"
+
+# With system prompt
+ollama-cli compare "Optimize this code" --system "You are an expert developer"
 ```
 
 ### `models`
@@ -322,6 +385,231 @@ ollama-cli plan show abc12345
 ollama-cli plan delete abc12345
 ```
 
+### `index`
+
+Build and manage codebase index for better symbol search and context.
+
+```bash
+ollama-cli index <command> [args...]
+
+Commands:
+  build               Build index (only if needed)
+  rebuild             Force rebuild index
+  stats               Show index statistics
+  clear               Clear index
+```
+
+**Examples:**
+```bash
+# Build index for current project
+ollama-cli index build
+
+# Force rebuild
+ollama-cli index rebuild
+
+# View statistics
+ollama-cli index stats
+
+# In REPL
+/index build
+/search handleCommand
+/search MyClass --type class
+```
+
+**Index Features:**
+- Indexes TypeScript, JavaScript, Python files
+- Extracts functions, classes, interfaces, types, variables
+- Fuzzy search with relevance scoring
+- Auto-detects file modifications
+- Stores at `~/.ollama-cli/index/codebase-index.json`
+
+### `workflow`
+
+Manage and execute YAML-based automation workflows.
+
+```bash
+ollama-cli workflow <command> [args...]
+
+Commands:
+  run <name>              Run a workflow
+  list                    List available workflows
+  show <name>             Show workflow details
+```
+
+**Examples:**
+```bash
+# List workflows
+ollama-cli workflow list
+
+# Run deployment workflow
+ollama-cli workflow run deploy
+
+# Show workflow steps
+ollama-cli workflow show deploy
+```
+
+**Example Workflow (`.ollama/workflows/deploy.yml`):**
+```yaml
+name: Deploy Workflow
+description: Build, test, and deploy application
+steps:
+  - name: Install dependencies
+    type: bash
+    command: npm install
+  - name: Run tests
+    type: test
+  - name: Build project
+    type: bash
+    command: npm run build
+  - name: Deploy
+    type: bash
+    command: npm run deploy
+```
+
+### `database`
+
+Execute SQL queries and inspect database schemas (SQLite).
+
+```bash
+ollama-cli database <command> [args...]
+
+Commands:
+  query <sql>             Execute SQL query
+  schema                  Show database schema
+  tables                  List all tables
+  describe <table>        Describe table structure
+
+Options:
+  --file <path>           Database file path (default: ./database.db)
+  --table <name>          Table name for describe command
+```
+
+**Examples:**
+```bash
+# Execute query
+ollama-cli database query "SELECT * FROM users LIMIT 10" --file ./app.db
+
+# View schema
+ollama-cli database schema --file ./app.db
+
+# List tables
+ollama-cli database tables --file ./app.db
+
+# Describe table
+ollama-cli database describe users --file ./app.db
+```
+
+### `rag`
+
+Vector embeddings and semantic search with RAG (Retrieval-Augmented Generation).
+
+```bash
+ollama-cli rag <command> [args...]
+
+Commands:
+  add <text>              Add document to vector store
+  search <query>          Search for similar documents
+  index                   Index entire codebase for RAG
+  stats                   Show vector store statistics
+  clear                   Clear vector store
+
+Options:
+  --file <path>           File to add (for add command)
+  --type <type>           Document type (code|documentation|text)
+  --language <lang>       Programming language
+  --model <model>         Embedding model (default: nomic-embed-text)
+  --topk <n>              Number of results (default: 5)
+  --min-score <n>         Minimum similarity score (default: 0.5)
+```
+
+**Examples:**
+```bash
+# Add documentation
+ollama-cli rag add "User authentication guide..." --type documentation
+
+# Add from file
+ollama-cli rag add --file README.md --type documentation
+
+# Search
+ollama-cli rag search "how to authenticate users" --topk 3
+
+# Index codebase
+ollama-cli rag index
+
+# View stats
+ollama-cli rag stats
+```
+
+**Benefits:**
+- Semantic search beyond keyword matching
+- Better AI context from large codebases
+- Document retrieval for assistance
+- Uses Ollama's embedding models (nomic-embed-text)
+
+### `api`
+
+HTTP client and API testing with validation.
+
+```bash
+ollama-cli api <command> [args...]
+
+Commands:
+  request <url>           Execute HTTP request
+  test <file>             Run API test suite
+
+Options:
+  --method <method>       HTTP method (GET|POST|PUT|PATCH|DELETE)
+  --header <header>       HTTP header (can be used multiple times)
+  --data <data>           Request body (JSON or raw)
+  --file <path>           Test file path (for test command)
+  --timeout <ms>          Request timeout in milliseconds
+```
+
+**Examples:**
+```bash
+# GET request
+ollama-cli api request https://api.example.com/users
+
+# POST request
+ollama-cli api request https://api.example.com/users \
+  --method POST \
+  --header "Content-Type: application/json" \
+  --data '{"name": "John Doe", "email": "john@example.com"}'
+
+# Run test suite
+ollama-cli api test api-tests.json
+```
+
+**Example Test File:**
+```json
+[
+  {
+    "name": "Get Users",
+    "request": {
+      "url": "https://api.example.com/users",
+      "method": "GET"
+    },
+    "validation": [
+      { "type": "status", "operator": "equals", "value": 200 },
+      { "type": "header", "field": "content-type", "operator": "contains", "value": "json" }
+    ]
+  },
+  {
+    "name": "Create User",
+    "request": {
+      "url": "https://api.example.com/users",
+      "method": "POST",
+      "headers": { "Content-Type": "application/json" },
+      "body": { "name": "Test User" }
+    },
+    "validation": [
+      { "type": "status", "operator": "equals", "value": 201 },
+      { "type": "json-path", "field": "id", "operator": "exists" }
+    ]
+  }
+]
+```
+
 ## Configuration
 
 Configuration is stored in `~/.ollama-cli/config.json`.
@@ -364,6 +652,7 @@ ollama-cli chat --tools
 - `list_directory` - Browse folders
 - `search_files` - Grep-like file search
 - `bash` - Execute shell commands (requires confirmation)
+- `execute_code` - Run Python, JavaScript, TypeScript, or Shell code (requires confirmation)
 - `copy_file`, `move_file`, `delete_file` - File operations
 - `create_directory` - Create directories
 

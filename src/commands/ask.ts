@@ -17,10 +17,49 @@ interface AskOptions {
   system?: string;
 }
 
+/**
+ * Read from stdin if data is available
+ */
+async function readStdin(): Promise<string | null> {
+  // Check if stdin is being piped (not a TTY)
+  if (process.stdin.isTTY) {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    let data = '';
+    process.stdin.setEncoding('utf-8');
+
+    process.stdin.on('data', (chunk) => {
+      data += chunk;
+    });
+
+    process.stdin.on('end', () => {
+      resolve(data.trim());
+    });
+
+    // If no data comes within 100ms, consider it empty
+    setTimeout(() => {
+      if (data === '') {
+        resolve(null);
+      }
+    }, 100);
+  });
+}
+
 export async function askCommand(prompt: string, options: AskOptions): Promise<void> {
   const config = await getEffectiveConfig();
   const model = options.model || config.defaultModel;
   const client = new OllamaClient(config.baseUrl, config.timeoutMs);
+
+  // Check for piped input
+  const stdinData = await readStdin();
+  let finalPrompt = prompt;
+
+  if (stdinData) {
+    // Prepend stdin data to prompt
+    finalPrompt = `${stdinData}\n\n${prompt}`;
+  }
 
   // Build messages array
   const messages: Message[] = [];
@@ -34,7 +73,7 @@ export async function askCommand(prompt: string, options: AskOptions): Promise<v
 
   messages.push({
     role: 'user',
-    content: prompt,
+    content: finalPrompt,
   });
 
   try {
