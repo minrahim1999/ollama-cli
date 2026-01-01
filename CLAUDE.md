@@ -4,14 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Ollama CLI is a professional command-line interface for Ollama (local LLM models), similar to Claude Code but powered by local models. It provides interactive chat, file operations via MCP tools, and automatic snapshot/rollback capabilities.
+Ollama CLI is a professional command-line interface for Ollama (local LLM models), similar to Claude Code but powered by local models. It provides interactive chat, file operations via MCP tools, automatic snapshot/rollback, templates, planning, and git integration.
 
 **Key Features:**
 - Interactive REPL with 25+ MCP tools (read/write files, execute commands, git operations)
 - 6 specialized AI assistants (File Writer, Coding Assistant, Code Reviewer, etc.)
 - Automatic snapshot system for file changes with undo/revert capability
+- Template library with 5 built-in templates and variable substitution
+- Conversation export/import (JSON, Markdown, TXT)
+- AI-powered git workflow (commit messages, PR summaries, code review)
+- Full-featured planning system with auto-detection and step-by-step execution
 - Project-aware context via `.ollama` directory
-- Enhanced UI with visual message separation and tool execution feedback
+- Modern gradient-based UI with clean typography
 
 ## Build & Development Commands
 
@@ -47,7 +51,11 @@ npm run build && node dist/cli.js chat --tools
    - `src/session/` - Conversation persistence
    - `src/assistants/` - Assistant management
    - `src/project/` - Project context & permissions
-4. **UI Layer** (`src/ui/`) - Display functions (pure, no state mutation)
+   - `src/templates/` - Template library with variable substitution
+   - `src/export/` - Conversation export/import (JSON, Markdown, TXT)
+   - `src/git/` - Git operations wrapper
+   - `src/planning/` - Planning system with auto-detection and execution
+4. **UI Layer** (`src/ui/`) - Display functions with gradient support (pure, no state mutation)
 
 ### Tool System Architecture
 
