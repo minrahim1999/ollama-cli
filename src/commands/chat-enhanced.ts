@@ -44,6 +44,7 @@ import {
   // formatVerboseResponse, // TODO: Use for post-processing verbose responses
 } from '../modes/verbose.js';
 import { interactiveRewind } from '../rewind/index.js';
+import { initializeHooks, triggerHooks } from '../hooks/index.js';
 import {
   displayWelcome,
   displayCodingAssistantWelcome,
@@ -319,6 +320,13 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
     session = await createSession(model);
   }
 
+  // Initialize hooks system and trigger session:start
+  await initializeHooks();
+  await triggerHooks({
+    event: 'session:start',
+    sessionId: session.id,
+  });
+
   // Add system message from agent or assistant
   if (session.messages.length === 0) {
     // Use agent system prompt if agent is loaded, otherwise use assistant
@@ -450,6 +458,13 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
     await addMessage(session, {
       role: 'user',
       content: trimmed,
+    });
+
+    // Trigger message:user hook
+    await triggerHooks({
+      event: 'message:user',
+      message: trimmed,
+      sessionId: session.id,
     });
 
     // Stream response

@@ -28,6 +28,8 @@ import { apiCommand } from './commands/api.js';
 import { setupCommand } from './commands/setup.js';
 import { agentCommand } from './commands/agent-cmd.js';
 import { headlessCommand } from './commands/headless.js';
+import { hooksCommand } from './commands/hooks.js';
+import { skillsCommand } from './commands/skills.js';
 import { isSetupComplete, runSetup, verifyModels } from './setup/index.js';
 
 const program = new Command();
@@ -302,6 +304,22 @@ program
   .option('--batch', 'Batch mode: process multiple prompts (one per line)')
   .action(async (prompt, options) => {
     await headlessCommand(prompt, options);
+  });
+
+// Hooks command
+program
+  .command('hooks <command>')
+  .description('Manage event-driven automation (list|add|remove|enable|disable|examples)')
+  .action(async (command) => {
+    await hooksCommand(command);
+  });
+
+// Skills command
+program
+  .command('skills <command> [args...]')
+  .description('AI capability discovery (list|popular|stats|suggest)')
+  .action(async (command, args) => {
+    await skillsCommand(command, args);
   });
 
 // Init command

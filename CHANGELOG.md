@@ -5,6 +5,135 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-01-02
+
+### 🎯 Phase 3: Automation & Intelligence
+
+#### Hooks System
+- **Event-driven automation** - Execute shell commands in response to events
+- **8 event types** - tool:before, tool:after, tool:error, message:user, message:assistant, session:start, session:end, error
+- **Variable substitution** - ${event}, ${toolName}, ${message}, ${sessionId}
+- **Hook management** - Add, remove, enable, disable hooks via CLI
+- **Example templates** - Pre-configured hooks for common use cases
+
+**Features:**
+- Trigger custom commands on any event
+- Desktop notifications, logging, email alerts
+- Conditional execution based on event context
+- Success/failure tracking
+- 30-second timeout protection
+
+**Usage:**
+```bash
+# List hooks
+ollama-cli hooks list
+
+# Add a hook
+ollama-cli hooks add
+# Select event: tool:after
+# Command: notify-send "Tool finished" "${toolName}"
+
+# View examples
+ollama-cli hooks examples
+
+# Enable/disable hooks
+ollama-cli hooks enable
+ollama-cli hooks disable
+```
+
+#### Skills System
+- **AI capability auto-discovery** - Discover and suggest AI skills
+- **7 default skills** - Code review, explanation, debugging, optimization, tests, refactoring, documentation
+- **Smart suggestions** - Context-aware skill recommendations
+- **Usage tracking** - Monitor skill usage and success rates
+- **Category organization** - Group skills by type (development, documentation, etc.)
+
+**Features:**
+- Suggests relevant skills based on user messages
+- Tracks usage count and success rate per skill
+- Categorized skill library
+- Popular skills ranking
+- Extensible skill registry
+
+**Usage:**
+```bash
+# List all skills
+ollama-cli skills list
+
+# Most popular skills
+ollama-cli skills popular
+
+# Skill statistics
+ollama-cli skills stats
+
+# Get suggestions
+ollama-cli skills suggest "help me fix this bug"
+```
+
+#### Structured Outputs
+- **JSON schema validation** - Enforce structured AI responses
+- **Schema templates** - Pre-built schemas for common tasks
+- **Strict mode** - Optional strict validation
+- **Auto-extraction** - Parse JSON from markdown code blocks
+
+**Features:**
+- Define custom JSON schemas
+- Validate AI responses against schemas
+- Built-in templates: codeReview, todoList, apiResponse
+- Augment system prompts for structured output
+- Graceful error handling
+
+**Usage:**
+```typescript
+import { validateJSON, parseStructuredResponse, SCHEMA_TEMPLATES } from './structured';
+
+// Use pre-built schema
+const schema = SCHEMA_TEMPLATES.codeReview;
+
+// Validate response
+const result = parseStructuredResponse(aiResponse, schema, true);
+if (result.success) {
+  console.log(result.data);
+}
+```
+
+### 🏗️ Architecture Updates
+
+**New Modules:**
+- `src/hooks/index.ts` - Event-driven automation system
+- `src/hooks/` - Hook management and execution
+- `src/skills/index.ts` - AI capability discovery
+- `src/structured/index.ts` - JSON schema validation
+- `src/commands/hooks.ts` - Hooks CLI command
+- `src/commands/skills.ts` - Skills CLI command
+
+**Enhanced Modules:**
+- `src/commands/chat-enhanced.ts` - Integrated hooks triggering
+- `src/cli.ts` - Added hooks and skills commands
+
+### 📚 Technical Details
+
+**Hooks System:**
+- Shell command execution via child_process
+- 30-second timeout per hook
+- Variable substitution in commands
+- Persistent hook configuration in ~/.ollama-cli/hooks/hooks.json
+- Execution stops on first failure
+
+**Skills System:**
+- Keyword matching for skill suggestions
+- Weighted relevance scoring (0-1)
+- Success rate tracking with weighted average
+- JSON-based skill registry
+- Category-based organization
+
+**Structured Outputs:**
+- Recursive schema validation
+- Type checking (string, number, boolean, object, array)
+- Required field validation
+- Enum validation
+- JSON extraction from markdown
+
 ## [2.6.0] - 2026-01-02
 
 ### 🎯 Phase 2: Advanced Features
