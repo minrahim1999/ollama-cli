@@ -7,7 +7,7 @@ import { displayError, displaySuccess, displayInfo } from '../ui/display.js';
 import { colors, gradients } from '../ui/colors.js';
 import { startSpinner, stopSpinner } from '../ui/spinner.js';
 import { getEffectiveConfig, saveConfig } from '../config/index.js';
-import { confirm } from '../utils/prompt.js';
+import { confirm, prompt, select } from '../utils/prompt.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -44,24 +44,83 @@ export async function isSetupComplete(): Promise<boolean> {
 }
 
 /**
+ * Prompt user for Ollama base URL
+ */
+async function promptForBaseUrl(): Promise<string> {
+  const DEFAULT_URL = 'http://localhost:11434';
+
+  console.log(colors.secondary('Ollama Base URL Configuration'));
+  console.log('');
+
+  const choice = await select('Choose Ollama server:', [
+    `Use default (${DEFAULT_URL})`,
+    'Enter custom URL',
+  ]);
+
+  if (choice.includes('default')) {
+    return DEFAULT_URL;
+  }
+
+  // Custom URL
+  let customUrl = '';
+  let isValid = false;
+
+  while (!isValid) {
+    customUrl = await prompt('Enter Ollama base URL', DEFAULT_URL);
+
+    // Remove trailing slash and /api if present
+    customUrl = customUrl.replace(/\/$/, '').replace(/\/api$/, '');
+
+    // Validate URL format
+    try {
+      const url = new URL(customUrl);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        console.log(colors.error('❌ URL must use http:// or https://'));
+        continue;
+      }
+      isValid = true;
+    } catch {
+      console.log(colors.error('❌ Invalid URL format. Please enter a valid URL (e.g., http://localhost:11434)'));
+    }
+  }
+
+  return customUrl;
+}
+
+/**
+ * Test connection to Ollama server
+ */
+async function testOllamaConnection(baseUrl: string): Promise<boolean> {
+  try {
+    const client = new OllamaClient(baseUrl + '/api');
+    startSpinner('Testing connection...');
+    await client.listModels();
+    stopSpinner();
+    return true;
+  } catch {
+    stopSpinner();
+    return false;
+  }
+}
+
+/**
  * Run first-time setup
  */
 export async function runSetup(): Promise<boolean> {
   console.log('');
   console.log(gradients.brand('🚀 Ollama CLI - First Run Setup'));
   console.log('');
-  console.log(colors.tertiary('Verifying required models for optimal functionality...'));
+
+  // Prompt for base URL
+  const baseUrl = await promptForBaseUrl();
   console.log('');
 
-  const config = await getEffectiveConfig();
-  const client = new OllamaClient(config.baseUrl);
-
-  // Check Ollama connection
-  displayInfo('Checking Ollama connection...');
-  const isConnected = await checkOllamaConnection(client);
+  // Test connection
+  displayInfo('Testing connection to Ollama...');
+  const isConnected = await testOllamaConnection(baseUrl);
 
   if (!isConnected) {
-    displayError('Cannot connect to Ollama');
+    displayError('Cannot connect to Ollama at ' + baseUrl);
     console.log('');
     console.log(colors.tertiary('Please ensure Ollama is running:'));
     console.log(colors.secondary('  ollama serve'));
@@ -71,8 +130,19 @@ export async function runSetup(): Promise<boolean> {
     return false;
   }
 
-  displaySuccess('Connected to Ollama');
+  displaySuccess('Connected to Ollama at ' + baseUrl);
   console.log('');
+
+  // Save base URL to config
+  await saveConfig({ baseUrl: baseUrl + '/api' });
+  console.log(colors.dim(`Configuration saved to ~/.ollama-cli/config.json`));
+  console.log('');
+
+  console.log(colors.tertiary('Verifying required models for optimal functionality...'));
+  console.log('');
+
+  const config = await getEffectiveConfig();
+  const client = new OllamaClient(config.baseUrl);
 
   // Check required models
   const requiredModels = {
@@ -193,21 +263,6 @@ export async function runSetup(): Promise<boolean> {
   console.log('');
 
   return true;
-}
-
-/**
- * Check Ollama connection
- */
-async function checkOllamaConnection(client: OllamaClient): Promise<boolean> {
-  try {
-    startSpinner('Connecting to Ollama...');
-    await client.listModels();
-    stopSpinner();
-    return true;
-  } catch {
-    stopSpinner();
-    return false;
-  }
 }
 
 /**

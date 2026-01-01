@@ -29,11 +29,12 @@ export async function configCommand(
           console.log(chalk.white('  baseUrl       ') + chalk.grey('- Ollama API base URL'));
           console.log(chalk.white('  defaultModel  ') + chalk.grey('- Default model to use'));
           console.log(chalk.white('  timeoutMs     ') + chalk.grey('- Request timeout in milliseconds'));
+          console.log(chalk.white('  autoPlan      ') + chalk.grey('- Enable automatic planning (true|false)'));
           process.exit(1);
         }
 
         // Validate key
-        if (!['baseUrl', 'defaultModel', 'timeoutMs'].includes(key)) {
+        if (!['baseUrl', 'defaultModel', 'timeoutMs', 'autoPlan'].includes(key)) {
           displayError(`Invalid configuration key: ${key}`);
           process.exit(1);
         }
@@ -49,7 +50,7 @@ export async function configCommand(
         }
 
         // Validate key
-        if (!['baseUrl', 'defaultModel', 'timeoutMs'].includes(key)) {
+        if (!['baseUrl', 'defaultModel', 'timeoutMs', 'autoPlan'].includes(key)) {
           displayError(`Invalid configuration key: ${key}`);
           process.exit(1);
         }

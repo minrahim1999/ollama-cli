@@ -29,3 +29,6 @@ coverage/
 
 # Session data (for development)
 .ollama-cli/
+
+# Project-specific directories
+.ollama/
