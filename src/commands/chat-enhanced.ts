@@ -5,6 +5,8 @@
 
 import readline from 'readline';
 import chalk from 'chalk';
+import fs from 'fs/promises';
+import path from 'path';
 import type { ChatSession } from '../types/index.js';
 import type { ToolCallRequest } from '../types/tools.js';
 import { OllamaClient } from '../api/client.js';
@@ -21,6 +23,17 @@ import {
   addMessage,
   clearMessages,
 } from '../session/index.js';
+import {
+  // getCurrentMode, // TODO: Use in updatePrompt
+  cyclePermissionMode,
+  toggleVerboseMode,
+  getModeIndicator,
+  getModeDescription,
+  // TODO: Integrate these in tool execution logic
+  // isVerboseMode,
+  // shouldExecuteTool,
+  // shouldAutoApproveTool,
+} from '../modes/permission.js';
 import {
   displayWelcome,
   displayCodingAssistantWelcome,
@@ -105,6 +118,30 @@ function setupKeyboardShortcuts(rl: readline.Interface): void {
         rl.prompt();
         // Force cursor to beginning
         process.stdout.write('\r\x1b[K');
+        rl.prompt();
+        return;
+      }
+
+      // Shift+Tab: Cycle permission modes (Normal → Auto-Accept → Plan)
+      if (key.shift && key.name === 'tab') {
+        const newMode = cyclePermissionMode();
+        const indicator = getModeIndicator(newMode);
+        const description = getModeDescription(newMode);
+        console.log('');
+        console.log(chalk.cyan(`${indicator} Mode: ${description}`));
+        console.log('');
+        // Update prompt to show new mode
+        rl.setPrompt(chalk.cyan(`${indicator} You: `));
+        rl.prompt();
+        return;
+      }
+
+      // Ctrl+O: Toggle verbose mode (extended thinking)
+      if (key.ctrl && key.name === 'o') {
+        const isVerbose = toggleVerboseMode();
+        console.log('');
+        console.log(chalk.cyan(`Verbose mode: ${isVerbose ? 'ON' : 'OFF'}`));
+        console.log('');
         rl.prompt();
         return;
       }
@@ -281,10 +318,17 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
       })
     : null;
 
+  // Helper function to update prompt with mode indicator (for future use)
+  // const updatePrompt = (rlInterface: readline.Interface) => {
+  //   const mode = getCurrentMode();
+  //   const indicator = getModeIndicator(mode);
+  //   rlInterface.setPrompt(chalk.cyan(`${indicator} You: `));
+  // };
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: chalk.cyan('You: '),
+    prompt: chalk.cyan('⏵ You: '), // Initial prompt with normal mode
   });
 
   // Set up custom keyboard shortcuts
@@ -300,6 +344,26 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
     const trimmed = input.trim();
 
     if (trimmed === '') {
+      rl.prompt();
+      return;
+    }
+
+    // Handle Bash Mode (! prefix) - Direct command execution
+    if (trimmed.startsWith('!')) {
+      const command = trimmed.substring(1).trim();
+      if (command) {
+        await handleBashMode(command);
+      }
+      rl.prompt();
+      return;
+    }
+
+    // Handle Memory Shortcuts (# prefix) - Add to PROJECT.md
+    if (trimmed.startsWith('#')) {
+      const note = trimmed.substring(1).trim();
+      if (note) {
+        await handleMemoryShortcut(note);
+      }
       rl.prompt();
       return;
     }
@@ -465,6 +529,82 @@ async function handleToolCall(
   } catch (error) {
     console.log(chalk.yellow('Could not parse tool call'));
   }
+}
+
+/**
+ * Handle Bash Mode - Direct command execution with ! prefix
+ */
+async function handleBashMode(command: string): Promise<void> {
+  try {
+    displayInfo(`Executing: ${command}`);
+    console.log('');
+
+    const { execAsync } = await import('../utils/exec.js');
+    const result = await execAsync(command);
+
+    if (result.stdout) {
+      console.log(result.stdout);
+    }
+    if (result.stderr) {
+      console.log(chalk.yellow(result.stderr));
+    }
+
+    displaySuccess(`Command completed (exit code: ${result.code || 0})`);
+  } catch (error) {
+    displayError(`Command failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+  console.log('');
+}
+
+/**
+ * Handle Memory Shortcuts - Add note to PROJECT.md with # prefix
+ */
+async function handleMemoryShortcut(note: string): Promise<void> {
+  try {
+    const projectMdPath = path.join(process.cwd(), 'PROJECT.md');
+
+    // Check if PROJECT.md exists
+    try {
+      await fs.access(projectMdPath);
+    } catch {
+      displayError('PROJECT.md not found in current directory');
+      console.log('');
+      console.log(colors.secondary('Initialize a project first with:'));
+      console.log(colors.tertiary('  ollama-cli init'));
+      console.log('');
+      return;
+    }
+
+    // Read current content
+    let content = await fs.readFile(projectMdPath, 'utf-8');
+
+    // Find or create "Notes" section
+    const notesHeader = '\n## Notes\n\n';
+    const notesRegex = /\n## Notes\n/;
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    const noteEntry = `- **${timestamp}**: ${note}\n`;
+
+    if (notesRegex.test(content)) {
+      // Add to existing Notes section
+      content = content.replace(notesRegex, `${notesHeader}${noteEntry}`);
+    } else {
+      // Create Notes section before footer
+      const footerRegex = /\n---\n/;
+      if (footerRegex.test(content)) {
+        content = content.replace(footerRegex, `${notesHeader}${noteEntry}\n---\n`);
+      } else {
+        // Add at end
+        content = content.trimEnd() + `\n${notesHeader}${noteEntry}`;
+      }
+    }
+
+    await fs.writeFile(projectMdPath, content, 'utf-8');
+    displaySuccess(`Added to PROJECT.md: "${note}"`);
+  } catch (error) {
+    displayError(`Failed to add note: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+  console.log('');
 }
 
 /**
@@ -882,6 +1022,20 @@ function displayEnhancedHelp(toolsEnabled: boolean): void {
   console.log(`  ${colors.brand.primary('/save [name]')}   ${colors.tertiary('Save session')}`);
   console.log(`  ${colors.brand.primary('/load <id>')}     ${colors.tertiary('Load session')}`);
   console.log(`  ${colors.brand.primary('/exit')}          ${colors.tertiary('Exit chat')}`);
+  console.log('');
+
+  console.log(colors.secondary(`${symbols.circle} Special Shortcuts`));
+  console.log('');
+  console.log(`  ${colors.brand.primary('!<command>')}     ${colors.tertiary('Bash mode - direct command execution')}`);
+  console.log(`  ${colors.brand.primary('#<note>')}        ${colors.tertiary('Add note to PROJECT.md memory')}`);
+  console.log('');
+
+  console.log(colors.secondary(`${symbols.circle} Keyboard Shortcuts`));
+  console.log('');
+  console.log(`  ${colors.brand.primary('Shift+Tab')}      ${colors.tertiary('Cycle permission modes (⏵ → ⏵⏵ → ⏸)')}`);
+  console.log(`  ${colors.brand.primary('Ctrl+O')}         ${colors.tertiary('Toggle verbose mode (extended thinking)')}`);
+  console.log(`  ${colors.brand.primary('Ctrl+K/L')}       ${colors.tertiary('Clear screen')}`);
+  console.log(`  ${colors.brand.primary('Ctrl+U')}         ${colors.tertiary('Clear current line')}`);
   console.log('');
 
   if (toolsEnabled) {
