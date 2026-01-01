@@ -8,8 +8,13 @@ Ollama CLI is a professional command-line interface for Ollama (local LLM models
 
 **Key Features:**
 - **First-run setup with model verification** - Ensures required models are installed
-- **Interactive command autocomplete** - Type "/" for real-time command suggestions (NEW)
-- **Agent system with keyboard navigation** - Framework-specific AI agents with arrow key selection (NEW)
+- **Interactive command autocomplete** - Type "/" for real-time command suggestions
+- **Agent system with keyboard navigation** - Framework-specific AI agents with arrow key selection
+- **Batch processing** - Process multiple prompts from JSON/text files (NEW v2.4.0)
+- **Conversation branching** - Git-like branching for conversations (NEW v2.4.0)
+- **Context management** - Token budgets and smart filtering (NEW v2.4.0)
+- **Diff-based editing** - Unified diff generation and parsing (NEW v2.4.0)
+- **Enhanced prompt library** - Full CRUD with search and variables (NEW v2.4.0)
 - Interactive REPL with 26+ MCP tools (read/write files, execute code, commands, git operations)
 - 6 specialized AI assistants (File Writer, Coding Assistant, Code Reviewer, etc.)
 - Automatic snapshot system for file changes with undo/revert capability
@@ -24,10 +29,10 @@ Ollama CLI is a professional command-line interface for Ollama (local LLM models
 - Keyboard shortcuts (Ctrl+K/L, Ctrl+U, etc.)
 - **Codebase indexing** with fuzzy symbol search
 - **Test integration** with AI failure analysis
-- **Workflow automation** with YAML-based workflows (NEW)
-- **Database tools** for SQLite queries and schema inspection (NEW)
-- **RAG system** with vector embeddings and semantic search (NEW)
-- **API testing** with HTTP client and response validation (NEW)
+- **Workflow automation** with YAML-based workflows
+- **Database tools** for SQLite queries and schema inspection
+- **RAG system** with vector embeddings and semantic search
+- **API testing** with HTTP client and response validation
 - Project-aware context via `.ollama` directory
 - Modern gradient-based UI with clean typography
 
@@ -64,7 +69,12 @@ npm run build && node dist/cli.js chat --tools
    - `src/memory/` - Snapshot system (SHA-256 hashing)
    - `src/session/` - Conversation persistence
    - `src/assistants/` - Assistant management
-   - `src/agents/` - Agent system (parser, manager, creator) (NEW)
+   - `src/agents/` - Agent system (parser, manager, creator)
+   - `src/batch/` - Batch prompt processing from JSON/text files (NEW)
+   - `src/branches/` - Conversation branching (git-like) (NEW)
+   - `src/context/` - Context management with token budgets (NEW)
+   - `src/diff/` - Diff generation and parsing utilities (NEW)
+   - `src/prompts/` - Enhanced prompt library with CRUD operations (NEW)
    - `src/project/` - Project context & permissions
    - `src/templates/` - Template library with variable substitution
    - `src/export/` - Conversation export/import (JSON, Markdown, TXT)
@@ -75,8 +85,8 @@ npm run build && node dist/cli.js chat --tools
    - `src/workflows/` - YAML workflow executor
    - `src/database/` - SQLite client and schema inspection
    - `src/rag/` - Vector embeddings and similarity search
-   - `src/utils/keyboard.ts` - Enhanced keyboard navigation with arrow keys (NEW)
-   - `src/utils/command-autocomplete.ts` - REPL command autocomplete system (NEW)
+   - `src/utils/keyboard.ts` - Enhanced keyboard navigation with arrow keys
+   - `src/utils/command-autocomplete.ts` - REPL command autocomplete system
    - `src/setup/` - First-run setup and model verification
 4. **UI Layer** (`src/ui/`) - Display functions with gradient & syntax highlighting support (pure, no state mutation)
 
@@ -425,6 +435,215 @@ npm test:coverage           # With coverage
 - `*.test.ts` files in same directory as implementation
 - Mock Ollama API responses for integration tests
 - Cover: config merging, session CRUD, snapshot integrity
+
+## New Core Systems (v2.4.0)
+
+### Batch Processing System
+
+**Location:** `src/batch/index.ts`
+
+Processes multiple prompts from JSON or text files in sequence or parallel.
+
+**File Formats:**
+```typescript
+// JSON format
+[
+  { id: 'task-1', prompt: 'Prompt 1', variables: { key: 'value' } },
+  { id: 'task-2', prompt: 'Prompt 2' }
+]
+
+// Text format (one prompt per line)
+Prompt 1
+Prompt 2
+Prompt 3
+```
+
+**Key Functions:**
+- `loadBatchFile(filePath)` - Load structured JSON batch file
+- `loadBatchTextFile(filePath)` - Load line-by-line text file
+- `saveBatchResults(results, outputPath)` - Save execution results
+
+**Result Structure:**
+```typescript
+{
+  id: string,
+  prompt: string,
+  variables?: Record<string, unknown>,
+  status: 'success' | 'error',
+  output?: string,
+  error?: string,
+  executionTime: number
+}
+```
+
+### Conversation Branching System
+
+**Location:** `src/branches/index.ts`
+
+Git-like branching for conversations, allowing multiple conversation paths from a single point.
+
+**Branch Metadata Structure:**
+```typescript
+{
+  currentBranchId: string,
+  branches: [
+    {
+      id: string,
+      name: string,
+      parentId?: string,
+      createdAt: string,
+      messageStartIndex: number,
+      isActive: boolean
+    }
+  ]
+}
+```
+
+**Key Functions:**
+- `initializeBranches(messages)` - Create initial main branch
+- `createBranch(metadata, name, parentId?, startIndex?)` - Create new branch
+- `switchBranch(metadata, branchId)` - Switch active branch
+- `listBranches(metadata)` - List all branches
+- `deleteBranch(metadata, branchId)` - Delete branch (except main)
+- `getCurrentBranch(metadata)` - Get active branch
+- `updateBranchMessages(metadata, branchId, messages)` - Update branch messages
+
+**Use Cases:**
+- A/B testing different conversation approaches
+- Exploring multiple solution paths
+- Maintaining conversation history across different contexts
+- Rolling back to earlier conversation states
+
+### Context Management System
+
+**Location:** `src/context/index.ts`
+
+Manages conversation context with token budgets, filtering rules, and auto-summarization.
+
+**Context Configuration:**
+```typescript
+{
+  rules: ContextRule[],        // Include/exclude patterns
+  tokenBudget?: number,         // Max tokens (optional)
+  autoSummarize: boolean,       // Auto-compress when over budget
+  includeFiles: boolean,        // Include file contents in context
+  priorityMessages?: string[]   // Always-include message IDs
+}
+
+// ContextRule structure
+{
+  type: 'include' | 'exclude',
+  pattern: string,              // Regex pattern
+  field: 'role' | 'content'     // Which field to match
+}
+```
+
+**Key Functions:**
+- `getDefaultContextConfig()` - Get default configuration
+- `estimateTokens(messages)` - Estimate token count (~4 chars/token)
+- `matchesRules(message, rules)` - Check if message matches rules
+- `filterMessages(messages, config)` - Apply filtering rules
+- `getContextStats(messages)` - Get token/message statistics
+- `addContextRule(config, rule)` - Add new filtering rule
+- `setTokenBudget(config, budget)` - Set token budget
+- `summarizeMessages(messages)` - Summarize to reduce tokens (TODO)
+
+**Token Estimation:**
+Uses approximate 4 characters per token heuristic. For production, consider using tiktoken or similar.
+
+### Diff-Based Code Application
+
+**Location:** `src/diff/index.ts`
+
+Generates and parses unified diffs for safe code modifications.
+
+**Diff Structure:**
+```typescript
+{
+  oldFile: string,
+  newFile: string,
+  hunks: [
+    {
+      oldStart: number,
+      oldLines: number,
+      newStart: number,
+      newLines: number,
+      lines: string[]  // Prefixed with ' ', '+', or '-'
+    }
+  ]
+}
+```
+
+**Key Functions:**
+- `generateDiff(oldContent, newContent, filePath)` - Generate unified diff
+- `parseDiff(diffText)` - Parse diff text into structured hunks
+- `extractFilePath(diffLine)` - Extract file path from --- or +++ line
+- `applyDiff(filePath, diff)` - Apply diff to file (TODO)
+- `previewDiff(diff)` - Format diff for display
+
+**Diff Format:**
+```diff
+--- a/file.ts
++++ b/file.ts
+@@ -1,3 +1,3 @@
+ line 1
+-old line 2
++new line 2
+ line 3
+```
+
+**Integration:**
+- Used by snapshot system for change tracking
+- Enables precise code modifications via AI
+- Foundation for diff-based editing tool
+
+### Enhanced Prompt Library
+
+**Location:** `src/prompts/index.ts`
+
+Full-featured prompt management with CRUD operations, variables, and search.
+
+**Prompt Structure:**
+```typescript
+{
+  name: string,                 // Unique identifier
+  content: string,              // Template with {{variables}}
+  description?: string,
+  category?: string,            // code, docs, git, general
+  tags: string[],               // Multiple tags
+  variables: string[],          // Auto-extracted from {{var}}
+  createdAt: string,
+  updatedAt: string
+}
+```
+
+**Storage:** `~/.ollama-cli/prompts.json`
+
+**Key Functions:**
+- `createPrompt(prompt)` - Create new prompt
+- `getPrompt(name)` - Get prompt by name
+- `updatePrompt(name, updates)` - Update existing prompt
+- `deletePrompt(name)` - Delete prompt
+- `listPrompts()` - List all prompts
+- `searchPrompts(query)` - Search across all fields
+- `extractVariables(content)` - Extract {{variables}} from template
+- `renderPrompt(prompt, variables)` - Substitute variables with values
+
+**Variable Syntax:**
+```typescript
+// Template
+const template = "Review this {{language}} code in {{file}}";
+
+// Variables
+const vars = { language: 'TypeScript', file: 'app.ts' };
+
+// Result
+const rendered = renderPrompt(prompt, vars);
+// "Review this TypeScript code in app.ts"
+```
+
+**Search:**
+Searches across: name, content, description, category, and tags (case-insensitive).
 
 ## Common Patterns
 

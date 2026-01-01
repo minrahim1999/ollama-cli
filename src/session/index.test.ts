@@ -37,6 +37,8 @@ describe('Session Management', () => {
     } catch {
       // Directory doesn't exist
     }
+    // Recreate test directory
+    await fs.mkdir(TEST_SESSIONS_DIR, { recursive: true });
   });
 
   afterEach(async () => {

@@ -5,6 +5,170 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-01-01
+
+### 🎯 Core Enhancements
+
+#### 📦 Batch Processing
+- **Batch prompt execution** - Process multiple prompts from JSON or text files
+- **Variable substitution** - Dynamic variables in batch prompts
+- **Result aggregation** - Save batch execution results to JSON
+- **Two file formats** - JSON (structured) or TXT (line-by-line)
+- **Progress tracking** - Monitor batch execution progress
+
+**Features:**
+- Load prompts from JSON with id, prompt, and variables
+- Load prompts from text files (one prompt per line)
+- Execute prompts in sequence or parallel
+- Save results with status, timing, and output
+- Error handling for failed prompts
+
+**Usage:**
+```typescript
+// Load batch file
+const prompts = await loadBatchFile('prompts.json');
+
+// Execute batch
+const results = await executeBatch(prompts);
+
+// Save results
+await saveBatchResults(results, 'results.json');
+```
+
+#### 🌿 Conversation Branching
+- **Git-like branching** - Create multiple conversation branches
+- **Branch switching** - Switch between different conversation paths
+- **Branch management** - List, create, delete branches
+- **Message isolation** - Each branch maintains its own message history
+- **Active branch tracking** - Know which branch you're currently on
+
+**Features:**
+- Initialize with main branch
+- Create branches at any point in conversation
+- Switch between branches without losing context
+- Update branch messages independently
+- Track branch metadata (name, parent, created time)
+- List all branches with active status
+
+**Use Cases:**
+- Explore different conversation directions
+- Compare AI responses to same prompt
+- Maintain multiple solution approaches
+- A/B testing conversation flows
+
+#### 🧠 Context Management
+- **Token budget control** - Set and enforce token limits
+- **Smart message filtering** - Filter by role, content, metadata
+- **Token estimation** - Estimate token count for messages
+- **Context statistics** - Track token usage and message counts
+- **Auto-summarization** - Automatic context compression (configurable)
+- **File inclusion** - Control whether to include file contents
+
+**Features:**
+- Define context filtering rules (include/exclude patterns)
+- Set token budgets to prevent context overflow
+- Estimate tokens using ~4 chars per token heuristic
+- Get context statistics (total tokens, messages, filtered count)
+- Add rules dynamically during conversation
+- Enable/disable auto-summarization
+
+**Context Configuration:**
+```typescript
+{
+  rules: ContextRule[],           // Filtering rules
+  tokenBudget?: number,            // Max tokens allowed
+  autoSummarize: boolean,          // Auto-compress context
+  includeFiles: boolean,           // Include file contents
+  priorityMessages?: string[]      // Always-include message IDs
+}
+```
+
+#### 📝 Diff-Based Code Application
+- **Unified diff generation** - Generate standard unified diffs
+- **Diff parsing** - Parse diffs into structured hunks
+- **File path extraction** - Extract file paths from diff headers
+- **Multi-file support** - Handle diffs across multiple files
+- **Diff preview** - Preview changes before applying
+- **Safe application** - Validate diffs before modifying files
+
+**Features:**
+- Generate diffs between old and new content
+- Parse unified diff format into structured data
+- Extract file paths from diff headers (a/file.ts, b/file.ts)
+- Support for additions, deletions, modifications
+- Hunk-based change tracking
+- Line number and context preservation
+
+**Diff Format Support:**
+- Unified diff format (--- / +++ headers)
+- Context lines (unchanged)
+- Addition lines (+)
+- Deletion lines (-)
+- Hunk headers (@@ -old +new @@)
+
+#### 📋 Prompt Library Enhancement
+- **Prompt CRUD operations** - Create, read, update, delete prompts
+- **Variable extraction** - Auto-detect {{variables}} in prompts
+- **Prompt rendering** - Substitute variables with values
+- **Prompt search** - Search by name, content, tags, category
+- **Tag system** - Organize prompts with multiple tags
+- **Categories** - Group prompts by category (code, docs, etc.)
+- **Storage** - Persisted in `~/.ollama-cli/prompts.json`
+
+**Features:**
+- Create prompts with metadata (name, content, category, tags)
+- Extract variables from prompt templates ({{var}} syntax)
+- Render prompts with variable substitution
+- Search prompts across all fields
+- Update existing prompts
+- Delete prompts by name
+- List all prompts with filtering
+
+**Prompt Structure:**
+```typescript
+{
+  name: string,
+  content: string,           // Template with {{variables}}
+  description?: string,
+  category?: string,
+  tags: string[],
+  variables: string[],       // Auto-extracted
+  createdAt: string,
+  updatedAt: string
+}
+```
+
+**Example:**
+```typescript
+// Create prompt
+await createPrompt({
+  name: 'code-review',
+  content: 'Review this {{language}} code in {{file}}',
+  category: 'code',
+  tags: ['review', 'quality']
+});
+
+// Render with variables
+const result = renderPrompt(prompt, {
+  language: 'TypeScript',
+  file: 'app.ts'
+});
+// Output: "Review this TypeScript code in app.ts"
+```
+
+### 🔧 Technical Improvements
+- Comprehensive test coverage for all new modules (78 passing tests)
+- TypeScript strict mode compliance
+- Proper module isolation with mocks for testing
+- Consistent error handling patterns
+- Atomic file operations for data persistence
+- Type-safe interfaces for all new features
+
+### 🐛 Bug Fixes
+- **Test isolation** - Fixed session tests reading from production directory
+- **Mock configuration** - Proper vitest mocks for config module
+- **Test cleanup** - Consistent beforeEach/afterEach patterns
+
 ## [2.3.0] - 2026-01-01
 
 ### ⚡ Interactive Command Autocomplete

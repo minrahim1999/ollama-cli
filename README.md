@@ -75,7 +75,39 @@ A professional, feature-rich command-line interface for Ollama - chat with AI mo
 - **RAG System**: Vector embeddings for semantic search and context retrieval
 - **API Testing**: HTTP client with response validation and test suites
 
-### 🎯 Agent System (NEW!)
+### 🎯 Core Enhancements (NEW!)
+
+#### 📦 Batch Processing
+- **Batch Execution**: Process multiple prompts from JSON or text files
+- **Variable Substitution**: Dynamic variables in batch prompts
+- **Result Aggregation**: Save execution results with status and timing
+- **Two Formats**: JSON (structured) or TXT (line-by-line)
+
+#### 🌿 Conversation Branching
+- **Git-like Branches**: Create and manage multiple conversation paths
+- **Branch Switching**: Explore different conversation directions
+- **Message Isolation**: Each branch maintains its own history
+- **A/B Testing**: Compare AI responses to same prompt
+
+#### 🧠 Context Management
+- **Token Budget Control**: Set and enforce token limits
+- **Smart Filtering**: Filter messages by role, content, metadata
+- **Auto-Summarization**: Automatic context compression
+- **Usage Statistics**: Track token usage and message counts
+
+#### 📝 Diff-Based Code Application
+- **Unified Diff Generation**: Generate standard unified diffs
+- **Diff Parsing**: Parse diffs into structured hunks
+- **Safe Application**: Preview and validate before applying
+- **Multi-file Support**: Handle diffs across multiple files
+
+#### 📋 Enhanced Prompt Library
+- **Full CRUD**: Create, read, update, delete prompts
+- **Variable Extraction**: Auto-detect {{variables}} in templates
+- **Prompt Search**: Search by name, content, tags, category
+- **Tag System**: Organize prompts with multiple tags
+
+### 🎯 Agent System
 - **Framework-Specific Agents**: Create specialized AI agents for Laravel, React, Django, etc.
 - **Markdown Definitions**: Agent configurations stored in readable .md files
 - **AI Auto-Generation**: Let AI create full agent definitions from descriptions
