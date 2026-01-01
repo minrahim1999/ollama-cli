@@ -7,6 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Ollama CLI is a professional command-line interface for Ollama (local LLM models), similar to Claude Code but powered by local models. It provides interactive chat, file operations via MCP tools, automatic snapshot/rollback, templates, planning, git integration, workflow automation, database tools, RAG system, API testing, and comprehensive productivity enhancements.
 
 **Key Features:**
+- **First-run setup with model verification** - Ensures required models are installed
+- **Interactive command autocomplete** - Type "/" for real-time command suggestions (NEW)
+- **Agent system with keyboard navigation** - Framework-specific AI agents with arrow key selection (NEW)
 - Interactive REPL with 26+ MCP tools (read/write files, execute code, commands, git operations)
 - 6 specialized AI assistants (File Writer, Coding Assistant, Code Reviewer, etc.)
 - Automatic snapshot system for file changes with undo/revert capability
@@ -61,6 +64,7 @@ npm run build && node dist/cli.js chat --tools
    - `src/memory/` - Snapshot system (SHA-256 hashing)
    - `src/session/` - Conversation persistence
    - `src/assistants/` - Assistant management
+   - `src/agents/` - Agent system (parser, manager, creator) (NEW)
    - `src/project/` - Project context & permissions
    - `src/templates/` - Template library with variable substitution
    - `src/export/` - Conversation export/import (JSON, Markdown, TXT)
@@ -68,9 +72,12 @@ npm run build && node dist/cli.js chat --tools
    - `src/planning/` - Planning system with auto-detection and execution
    - `src/indexing/` - Codebase indexing and symbol search
    - `src/testing/` - Test runner and failure analysis
-   - `src/workflows/` - YAML workflow executor (NEW)
-   - `src/database/` - SQLite client and schema inspection (NEW)
-   - `src/rag/` - Vector embeddings and similarity search (NEW)
+   - `src/workflows/` - YAML workflow executor
+   - `src/database/` - SQLite client and schema inspection
+   - `src/rag/` - Vector embeddings and similarity search
+   - `src/utils/keyboard.ts` - Enhanced keyboard navigation with arrow keys (NEW)
+   - `src/utils/command-autocomplete.ts` - REPL command autocomplete system (NEW)
+   - `src/setup/` - First-run setup and model verification
 4. **UI Layer** (`src/ui/`) - Display functions with gradient & syntax highlighting support (pure, no state mutation)
 
 ### Tool System Architecture
@@ -131,6 +138,150 @@ export async function readFile(params): Promise<string>
 const assistant = await getAssistant(assistantId);
 const systemPrompt = assistant.systemPrompt;
 ```
+
+### Agent System
+
+**Storage Locations:**
+- Global: `~/.ollama-cli/agents/*.md`
+- Project: `.ollama/agents/*.md`
+
+**Architecture:**
+Agents are specialized AI assistants defined in markdown files with YAML frontmatter. They provide framework-specific expertise (Laravel, React, Django, etc.) and can be scoped globally or per-project.
+
+**Agent Definition Structure:**
+```markdown
+---
+name: laravel-developer
+description: Laravel development expert
+framework: laravel
+language: php
+version: 1.0.0
+author: AI Generated
+tags: laravel, php, backend
+createdAt: 2026-01-01T00:00:00.000Z
+updatedAt: 2026-01-01T00:00:00.000Z
+---
+
+# Laravel Developer
+
+## Context
+[Detailed domain expertise]
+
+## Capabilities
+- Capability 1
+- Capability 2
+
+## Instructions
+[Behavioral guidelines]
+
+## Tools Available
+- read_file
+- write_file
+- bash
+
+## Example Prompts
+- Example 1
+- Example 2
+
+## Constraints
+- Limitation 1
+```
+
+**Core Files:**
+- `src/agents/parser.ts` - Markdown parsing (frontmatter + sections)
+- `src/agents/manager.ts` - CRUD operations (load, save, list, delete)
+- `src/agents/creator.ts` - Auto-generation and templates
+- `src/commands/agent-cmd.ts` - CLI command handler
+- `src/types/agent.ts` - Type definitions
+
+**Usage in code:**
+```typescript
+// Load agent
+const agent = await loadAgent('laravel-developer');
+const systemPrompt = getAgentSystemPrompt(agent.definition);
+
+// Use in chat
+ollama-cli chat --agent laravel-developer
+```
+
+**Key Functions:**
+- `parseAgentMarkdown()` - Parse markdown to AgentDefinition
+- `generateAgentMarkdown()` - Generate markdown from definition
+- `autoGenerateAgent()` - AI-powered agent creation
+- `createAgentTemplate()` - Manual template creation
+- `loadAgent(name, scope?)` - Load agent by name
+- `saveAgent(definition, scope)` - Save to .md file
+- `listAgents()` - List all agents (global + project)
+- `getAgentSystemPrompt()` - Generate system prompt
+
+**CLI Commands:**
+```bash
+ollama-cli agent list                    # List all agents
+ollama-cli agent create                  # Interactive creation
+ollama-cli agent show <name>             # Show details
+ollama-cli agent edit <name>             # Edit definition
+ollama-cli agent delete <name>           # Delete agent
+ollama-cli chat --agent <name>           # Use in chat
+```
+
+**Keyboard Navigation:**
+Implemented in `src/utils/keyboard.ts`:
+- `selectWithKeyboard()` - Single selection with arrow keys
+- `multiSelectWithKeyboard()` - Multi-selection with checkboxes
+- Arrow keys (↑↓) to navigate
+- Space to toggle checkboxes
+- Enter to confirm
+- Escape to cancel
+- TTY detection with fallback to numbered input
+
+### Command Autocomplete System
+
+**Purpose:** Interactive autocomplete for REPL commands in chat sessions
+
+**Implementation:** `src/utils/command-autocomplete.ts`
+
+**How It Works:**
+1. User types "/" in chat → triggers autocomplete
+2. Shows all 25+ REPL commands with descriptions
+3. User types more (e.g., "/e") → filters to matching commands
+4. Arrow keys to navigate, Tab/Enter to select
+5. Selected command fills the input line
+
+**Command Registry:**
+```typescript
+export const REPL_COMMANDS: CommandDefinition[] = [
+  { command: '/help', description: 'Show help', category: 'Help' },
+  { command: '/new', description: 'Start new conversation', category: 'Session' },
+  { command: '/export', description: 'Export conversation',
+    usage: '/export [format] [filename]', category: 'Export' },
+  // ... 25+ commands total
+];
+```
+
+**Key Functions:**
+- `filterCommands(searchTerm)` - Real-time filtering by command name or description
+- `showCommandAutocomplete(currentInput)` - Display autocomplete UI with keyboard navigation
+
+**Integration:**
+Modified `setupKeyboardShortcuts()` in `src/commands/chat-enhanced.ts`:
+```typescript
+// Trigger autocomplete on "/"
+if (key.sequence === '/' && rl.line === '') {
+  const selected = await showCommandAutocomplete('/');
+  if (selected) {
+    rl.line = selected; // Fill selected command
+  }
+}
+```
+
+**Features:**
+- Shows up to 8 commands at a time
+- Selected command displays usage syntax
+- Real-time filtering as user types
+- Backspace to refine search
+- Escape to cancel
+- Default selection on top match
+- Categories: Session, Tools, Snapshots, Templates, Git, Planning, etc.
 
 ### Project Context System
 
@@ -707,3 +858,90 @@ ollama-cli api test tests.json
 - JSON pretty-printing
 - Request duration in milliseconds
 - Test results with pass/fail icons
+
+## Security & Setup System
+
+### First-Run Setup
+
+**Implementation:** `src/setup/index.ts`, `src/commands/setup.ts`
+
+**Storage:** `~/.ollama-cli/setup.json`
+
+**Setup Flow:**
+1. Check if setup has been completed (reads setup.json)
+2. If first run:
+   - Test Ollama connection
+   - List available models
+   - Verify required models exist
+   - Prompt user to install missing models
+   - Save setup state
+3. If previously setup:
+   - Verify models periodically (every 7 days)
+   - Re-check model availability
+   - Update last check timestamp
+
+**Setup State:**
+```typescript
+{
+  initialized: boolean,
+  modelsChecked: boolean,
+  lastCheck: ISO timestamp,
+  requiredModels: {
+    chat: "llama3.2",
+    embedding: "nomic-embed-text"
+  }
+}
+```
+
+**Model Checks:**
+- **Chat Model**: Required for all LLM operations (chat, ask, compare)
+- **Embedding Model**: Optional, needed for RAG features
+
+**Integration:**
+- Runs automatically before chat, ask, compare commands
+- Can be skipped with `--skip-setup` flag
+- Exits with code 1 if models missing
+
+**Commands:**
+```bash
+ollama-cli setup init    # Run setup manually
+ollama-cli setup status  # Show current status
+ollama-cli setup reset   # Clear setup state
+```
+
+**Security Benefits:**
+- Prevents running with incompatible/missing models
+- Early error detection
+- Clear user guidance
+- Protects against runtime failures
+- Ensures consistent user experience
+
+**Auto-Download Feature:**
+- Prompts user for permission before downloading
+- Shows storage warning (models are 1-10 GB)
+- Tracks download progress with:
+  - Status messages (pulling manifest, downloading, verifying)
+  - Percentage complete
+  - Downloaded size / Total size (formatted: MB, GB)
+  - Real-time spinner updates
+- Handles errors gracefully
+- Falls back to manual instructions if download fails
+
+**Download Implementation:**
+```typescript
+// Uses Ollama's /pull API endpoint
+await client.pullModel(modelName, (progress) => {
+  const { status, completed, total } = progress;
+  const percentage = Math.round((completed / total) * 100);
+  const downloaded = formatBytes(completed);  // "1.2 GB"
+  const totalSize = formatBytes(total);       // "2.7 GB"
+  
+  // Update spinner: "pulling manifest - 45% (1.2 GB / 2.7 GB)"
+});
+```
+
+**User Prompts:**
+- Uses readline for interactive Yes/No confirmation
+- Default is Yes (press Enter to accept)
+- Can decline to install manually later
+- Non-blocking - respects user's choice

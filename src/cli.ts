@@ -25,18 +25,59 @@ import { workflowCommand } from './commands/workflow.js';
 import { databaseCommand } from './commands/database.js';
 import { ragCommand } from './commands/rag.js';
 import { apiCommand } from './commands/api.js';
+import { setupCommand } from './commands/setup.js';
+import { agentCommand } from './commands/agent-cmd.js';
+import { isSetupComplete, runSetup, verifyModels } from './setup/index.js';
 
 const program = new Command();
+
+/**
+ * Ensure setup is complete before running commands
+ */
+async function ensureSetup(): Promise<boolean> {
+  const setupComplete = await isSetupComplete();
+  if (!setupComplete) {
+    const success = await runSetup();
+    if (!success) {
+      return false;
+    }
+    console.log('');
+    return true;
+  } else {
+    // Verify models periodically
+    return await verifyModels();
+  }
+}
 
 program
   .name('ollama-cli')
   .description('AI Coding Assistant powered by Ollama')
-  .version('1.0.0')
+  .version('2.3.0')
   .option('-m, --model <model>', 'Model to use')
   .option('-s, --session <id>', 'Resume a specific session')
   .option('-a, --assistant <id>', 'Use specific assistant')
+  .option('--agent <name>', 'Use specialized agent (e.g., laravel-developer)')
   .option('--working-dir <path>', 'Working directory for tools (default: current)')
+  .option('--skip-setup', 'Skip setup verification')
   .action(async (options) => {
+    // Check setup on first run
+    if (!options.skipSetup) {
+      const setupComplete = await isSetupComplete();
+      if (!setupComplete) {
+        const success = await runSetup();
+        if (!success) {
+          process.exit(1);
+        }
+        console.log('');
+      } else {
+        // Verify models periodically
+        const modelsValid = await verifyModels();
+        if (!modelsValid) {
+          process.exit(1);
+        }
+      }
+    }
+
     // Default action: start coding assistant with tools enabled
     await chatCommandEnhanced({
       ...options,
@@ -51,10 +92,17 @@ program
   .option('-m, --model <model>', 'Model to use')
   .option('-s, --session <id>', 'Resume a specific session')
   .option('-a, --assistant <id>', 'Use specific assistant')
+  .option('--agent <name>', 'Use specialized agent (e.g., laravel-developer)')
   .option('--system <message>', 'Set system prompt')
   .option('--tools', 'Enable MCP tools (read, write, bash, etc.)')
   .option('--working-dir <path>', 'Working directory for tools (default: current)')
+  .option('--skip-setup', 'Skip setup verification')
   .action(async (options) => {
+    // Verify setup before starting chat
+    if (!options.skipSetup && !(await ensureSetup())) {
+      process.exit(1);
+    }
+
     if (options.tools || options.assistant) {
       await chatCommandEnhanced(options);
     } else {
@@ -70,7 +118,13 @@ program
   .option('--json <schema>', 'Generate JSON matching the schema file')
   .option('--raw', 'Output raw response without formatting')
   .option('--system <message>', 'Set system prompt')
+  .option('--skip-setup', 'Skip setup verification')
   .action(async (prompt, options) => {
+    // Verify setup before asking
+    if (!options.skipSetup && !(await ensureSetup())) {
+      process.exit(1);
+    }
+
     await askCommand(prompt, options);
   });
 
@@ -80,7 +134,13 @@ program
   .description('Compare responses from multiple models')
   .option('--models <models>', 'Comma-separated list of models (e.g., "llama3.1,mistral,codellama")')
   .option('--system <message>', 'Set system prompt')
+  .option('--skip-setup', 'Skip setup verification')
   .action(async (prompt, options) => {
+    // Verify setup before comparing
+    if (!options.skipSetup && !(await ensureSetup())) {
+      process.exit(1);
+    }
+
     await compareCommand(prompt, options);
   });
 
@@ -209,6 +269,22 @@ program
   .option('--timeout <ms>', 'Request timeout in milliseconds', parseInt)
   .action(async (command, args, options) => {
     await apiCommand(command, args, options);
+  });
+
+// Setup command
+program
+  .command('setup <command>')
+  .description('Manage first-run setup and model verification (init|reset|status)')
+  .action(async (command) => {
+    await setupCommand(command);
+  });
+
+// Agent command
+program
+  .command('agent <command> [args...]')
+  .description('Manage specialized AI agents (list|create|show|delete|edit)')
+  .action(async (command, args) => {
+    await agentCommand(command, args);
   });
 
 // Init command

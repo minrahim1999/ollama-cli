@@ -7,6 +7,183 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.3.0] - 2026-01-01
 
+### ⚡ Interactive Command Autocomplete
+
+#### Smart Command Helper
+- **Real-time autocomplete** - Type "/" to see all available REPL commands
+- **Live search filtering** - Commands filter as you type (e.g., "/e" shows /export, /exit)
+- **Keyboard navigation** - Arrow keys (↑↓) to navigate, Tab/Enter to select
+- **Visual preview** - See command descriptions and usage examples
+- **Fuzzy matching** - Matches command names and descriptions
+- **Instant help** - Quick reference for all 25+ REPL commands
+
+**How It Works:**
+```bash
+# In chat, type "/" to trigger autocomplete
+You: /
+
+# Autocomplete shows all commands
+Commands (use ↑↓ to navigate, Tab/Enter to select, Esc to cancel):
+❯ /help - Show help
+  /new - Start new conversation
+  /tools - List all tools
+  ...
+
+# Type more to filter
+You: /e
+
+# Shows only matching commands
+Commands:
+❯ /export - Export conversation
+    /export [format] [filename]
+  /exit - Exit chat
+  ...
+
+# Use arrow keys to navigate, Tab/Enter to select
+```
+
+**Features:**
+- Shows up to 8 commands at a time
+- Selected command shows detailed usage
+- Real-time filtering as you type
+- Backspace to refine search
+- Escape to cancel
+- Default selection on top item
+- Categorized commands (Session, Tools, Snapshots, Git, etc.)
+
+### 🎯 Agent System
+
+#### Specialized AI Agents
+- **Framework-specific agents** - Create specialized agents for Laravel, React, Django, etc.
+- **Markdown-based definitions** - Agents defined in readable .md files with YAML frontmatter
+- **Two creation modes** - AI auto-generation or manual template editing
+- **Dual storage scope** - Global (`~/.ollama-cli/agents/`) or project-specific (`.ollama/agents/`)
+- **Enhanced keyboard navigation** - Arrow keys (↑↓) for all selections, no number entry required
+- **Multi-select support** - Checkboxes with Space to toggle, Enter to confirm
+- **Agent management** - Full CRUD: list, create, show, edit, delete
+- **Chat integration** - Use agents with `--agent <name>` flag
+
+**Agent Commands:**
+```bash
+# List all agents (global + project)
+ollama-cli agent list
+
+# Create new agent interactively
+ollama-cli agent create
+
+# Show agent details
+ollama-cli agent show laravel-developer
+
+# Edit agent definition
+ollama-cli agent edit laravel-developer
+
+# Delete agent
+ollama-cli agent delete my-agent
+
+# Use agent in chat
+ollama-cli chat --agent laravel-developer
+ollama-cli --agent react-expert
+```
+
+**Agent Structure:**
+- **Metadata** - Name, description, framework, language, version, tags
+- **Context** - Detailed domain expertise and specialization
+- **Capabilities** - List of specific agent capabilities
+- **Instructions** - Behavioral guidelines and best practices
+- **Tools** - Available MCP tools for the agent
+- **Examples** - Sample prompts users can ask
+- **Constraints** - Limitations and scope boundaries
+
+**Creation Modes:**
+1. **Auto-generate** - AI creates full definition from description (uses llama3.2)
+2. **Manual template** - Pre-filled template for custom editing
+
+**Keyboard Navigation Features:**
+- Arrow keys (↑↓) to navigate options
+- Visual selection indicator (❯)
+- Colored interface for clarity
+- Space to toggle checkboxes (multi-select)
+- Enter to confirm selection
+- Escape to cancel (where applicable)
+- TTY detection with fallback to number input
+- No manual number entry required
+
+**Example Agent Definition:**
+```markdown
+---
+name: laravel-developer
+description: Laravel development expert
+framework: laravel
+language: php
+version: 1.0.0
+tags: laravel, php, backend
+---
+
+# Laravel Developer
+
+## Context
+Specialized assistant for Laravel framework...
+
+## Capabilities
+- Create and modify Eloquent models
+- Build RESTful APIs with Laravel
+...
+```
+
+### 🔒 Security & Setup
+
+#### First-Run Model Verification
+- **Automatic setup check** - Verifies required models on first run
+- **Model availability detection** - Checks for chat and embedding models
+- **Automatic model download** - Offers to download missing models with user permission
+- **Download progress tracking** - Shows percentage, size, and status in real-time
+- **Storage space awareness** - Asks permission before downloading (models are 1-10 GB)
+- **Guided installation** - Shows manual commands if user declines download
+- **Periodic verification** - Re-checks models every 7 days
+- **Setup state persistence** - Stored in `~/.ollama-cli/setup.json`
+- **CLI commands**: `ollama-cli setup init|status|reset`
+
+**Features:**
+- Prevents running without required models
+- User consent required for downloads (respects storage space)
+- Real-time progress with formatted file sizes (MB/GB)
+- Clear error messages with installation instructions
+- Skip setup with `--skip-setup` flag
+- Automatic Ollama connection testing
+- Model compatibility verification
+- Graceful fallback to manual installation
+
+**Required Models:**
+- Chat model (default: llama3.2)
+- Embedding model (optional: nomic-embed-text for RAG)
+
+**Usage:**
+```bash
+# First run automatically checks setup
+ollama-cli
+
+# If models missing, you'll see:
+# ⚠️  Missing required models
+# Would you like to download the missing models?
+# Note: Models can be large (1-10 GB) and will use disk space
+# Download missing models now? [Y/n]: y
+#
+# Downloading llama3.2...
+# This may take several minutes depending on model size and network speed
+#
+# pulling manifest - 45% (1.2 GB / 2.7 GB)
+# ✅ llama3.2 downloaded successfully!
+
+# Check setup status
+ollama-cli setup status
+
+# Re-run setup manually
+ollama-cli setup init
+
+# Reset setup state
+ollama-cli setup reset
+```
+
 ### 🚀 Advanced Features
 
 #### 📋 Workflow Automation

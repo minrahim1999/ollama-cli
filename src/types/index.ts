@@ -12,6 +12,7 @@ export interface OllamaConfig {
 export interface Message {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  timestamp?: string | undefined;
 }
 
 export interface ChatSession {
@@ -21,6 +22,8 @@ export interface ChatSession {
   messages: Message[];
   createdAt: string;
   updatedAt: string;
+  contextConfig?: import('./context.js').ContextConfig | undefined;
+  branchMetadata?: import('./branches.js').BranchMetadata | undefined;
 }
 
 export interface ChatRequestParams {

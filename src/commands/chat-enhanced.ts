@@ -10,6 +10,7 @@ import type { ToolCallRequest } from '../types/tools.js';
 import { OllamaClient } from '../api/client.js';
 import { getEffectiveConfig } from '../config/index.js';
 import { getDefaultAssistant, getAssistant } from '../assistants/index.js';
+import { loadAgent, getAgentSystemPrompt } from '../agents/manager.js';
 import { detectProjectContext, readProjectMd } from '../project/index.js';
 import { promptForPermissions } from '../project/permissions.js';
 import {
@@ -57,6 +58,7 @@ import { GIT_TEMPLATES } from '../templates/git-templates.js';
 import type { CommitStyle } from '../types/git.js';
 import { shouldTriggerPlanning } from '../planning/detector.js';
 import { createPlan, listPlans } from '../planning/index.js';
+import { showCommandAutocomplete } from '../utils/command-autocomplete.js';
 
 interface ChatOptions {
   model?: string;
@@ -65,6 +67,7 @@ interface ChatOptions {
   tools?: boolean; // Enable tools mode
   workingDir?: string;
   assistant?: string; // Assistant ID to use
+  agent?: string; // Agent name to use (e.g., laravel-developer)
 }
 
 /**
@@ -78,13 +81,21 @@ function setupKeyboardShortcuts(rl: readline.Interface): void {
       process.stdin.setRawMode(true);
     }
 
-    process.stdin.on('keypress', (_chunk, key) => {
+    let autocompleteActive = false;
+
+    process.stdin.on('keypress', async (_chunk, key) => {
       if (!key) return;
+
+      // Don't handle shortcuts if autocomplete is active
+      if (autocompleteActive) return;
+
+      const currentLine = (rl as unknown as { line: string }).line;
 
       // Ctrl+K or Ctrl+L: Clear screen
       if (key.ctrl && (key.name === 'k' || key.name === 'l')) {
         console.clear();
         rl.prompt();
+        return;
       }
 
       // Ctrl+U: Clear current line
@@ -94,6 +105,35 @@ function setupKeyboardShortcuts(rl: readline.Interface): void {
         // Force cursor to beginning
         process.stdout.write('\r\x1b[K');
         rl.prompt();
+        return;
+      }
+
+      // Trigger autocomplete when "/" is typed on an empty line
+      // The autocomplete function will handle all subsequent typing
+      if (key.sequence === '/' && currentLine === '') {
+        autocompleteActive = true;
+        const selected = await showCommandAutocomplete('/');
+        autocompleteActive = false;
+
+        // Always clear the line buffer first
+        (rl as unknown as { line: string }).line = '';
+
+        if (selected) {
+          // Clear the input line and show the selected command
+          process.stdout.write('\r\x1B[K');
+          process.stdout.write(colors.tertiary('You: ') + selected);
+          process.stdout.write('\n');
+
+          // Execute the selected command immediately
+          // Emit 'line' event to trigger command execution
+          rl.emit('line', selected);
+
+          // Show prompt for next input
+          rl.prompt();
+        } else {
+          // Show prompt
+          rl.prompt(true);
+        }
       }
     });
   }
@@ -104,7 +144,20 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
   const model = options.model || config.defaultModel;
   const workingDir = options.workingDir || process.cwd();
 
-  // Load assistant
+  // Load agent if provided (takes precedence over assistant)
+  let agentDefinition = null;
+  let agentName = null;
+  if (options.agent) {
+    const loadedAgent = await loadAgent(options.agent);
+    if (!loadedAgent) {
+      displayError(`Agent not found: ${options.agent}`);
+      process.exit(1);
+    }
+    agentDefinition = loadedAgent.definition;
+    agentName = agentDefinition.metadata.name;
+  }
+
+  // Load assistant (if agent not provided)
   const assistant = options.assistant
     ? await getAssistant(options.assistant)
     : await getDefaultAssistant();
@@ -132,9 +185,12 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
     projectMdContent = await readProjectMd(workingDir);
   }
 
-  // Use assistant's tools setting if not explicitly overridden
+  // Use agent/assistant's tools setting if not explicitly overridden
+  // Agents have tools enabled by default
   // Also check if project permissions allow tools
-  let toolsEnabled = options.tools !== undefined ? options.tools : assistant.toolsEnabled;
+  let toolsEnabled = options.tools !== undefined
+    ? options.tools
+    : (agentDefinition ? true : assistant.toolsEnabled);
 
   if (toolsEnabled && projectContext.hasOllamaDir) {
     // Check permissions
@@ -158,9 +214,10 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
     session = await createSession(model);
   }
 
-  // Add system message from assistant
+  // Add system message from agent or assistant
   if (session.messages.length === 0) {
-    let systemMessage = options.system || assistant.systemPrompt;
+    // Use agent system prompt if agent is loaded, otherwise use assistant
+    let systemMessage = options.system || (agentDefinition ? getAgentSystemPrompt(agentDefinition) : assistant.systemPrompt);
 
     // Add project context if available
     if (projectMdContent) {
@@ -190,11 +247,24 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
       sessionId: session.id,
       toolCount: getAllTools().length,
       workingDir,
-      assistantName: assistant.name,
-      assistantEmoji: assistant.emoji,
+      assistantName: agentName || assistant.name,
+      assistantEmoji: agentName ? '🎯' : assistant.emoji, // Use target emoji for agents
     });
   } else {
     displayWelcome(session.model, session.id);
+  }
+
+  // Display agent info if using an agent
+  if (agentName) {
+    console.log('');
+    console.log(colors.brand.primary(`🎯 Using Agent: ${agentName}`));
+    if (agentDefinition?.metadata.description) {
+      console.log(colors.dim(`   ${agentDefinition.metadata.description}`));
+    }
+    if (agentDefinition?.metadata.framework) {
+      console.log(colors.dim(`   Framework: ${agentDefinition.metadata.framework}`));
+    }
+    console.log('');
   }
 
   const client = new OllamaClient(config.baseUrl, config.timeoutMs);
@@ -599,6 +669,21 @@ async function handleCommand(
       break;
     }
 
+    case 'snippet': {
+      await handleSnippetCommand(args, session);
+      break;
+    }
+
+    case 'context': {
+      await handleContextCommand(args, session);
+      break;
+    }
+
+    case 'branch': {
+      await handleBranchCommand(args, session);
+      break;
+    }
+
     case 'stats':
       if (toolExecutor) {
         displayToolStats(toolExecutor);
@@ -614,9 +699,29 @@ async function handleCommand(
       process.exit(0);
       // No break needed as process.exit() terminates
       // eslint-disable-next-line no-fallthrough
-    default:
-      displayError(`Unknown command: /${cmd}`, 'Type /help to see available commands');
+    default: {
+      // Try to find similar commands
+      const { filterCommands } = await import('../utils/command-autocomplete.js');
+      const suggestions = filterCommands(`/${cmd}`);
+
+      if (suggestions.length > 0) {
+        displayError(`Unknown command: /${cmd}`);
+        console.log('');
+        console.log(colors.secondary('Did you mean:'));
+        // Show up to 5 suggestions
+        const topSuggestions = suggestions.slice(0, 5);
+        for (const suggestion of topSuggestions) {
+          console.log(`  ${colors.brand.primary(suggestion.command)} - ${colors.dim(suggestion.description)}`);
+        }
+        if (suggestions.length > 5) {
+          console.log(colors.dim(`  ... and ${suggestions.length - 5} more (type /help to see all)`));
+        }
+        console.log('');
+      } else {
+        displayError(`Unknown command: /${cmd}`, 'Type /help to see available commands');
+      }
       break;
+    }
   }
 }
 
@@ -790,6 +895,28 @@ function displayEnhancedHelp(toolsEnabled: boolean): void {
   console.log('');
   console.log(`  ${colors.brand.primary('/template <name>')} ${colors.tertiary('Use prompt template')}`);
   console.log(`  ${colors.brand.primary('/export [format]')} ${colors.tertiary('Export conversation')}`);
+  console.log('');
+
+  console.log(colors.secondary(`${symbols.circle} Prompt Library`));
+  console.log('');
+  console.log(`  ${colors.brand.primary('/snippet save')}     ${colors.tertiary('Save prompt snippet')}`);
+  console.log(`  ${colors.brand.primary('/snippet list')}     ${colors.tertiary('List all snippets')}`);
+  console.log(`  ${colors.brand.primary('/snippet use')}      ${colors.tertiary('Use a snippet')}`);
+  console.log(`  ${colors.brand.primary('/snippet delete')}   ${colors.tertiary('Delete snippet')}`);
+  console.log('');
+
+  console.log(colors.secondary(`${symbols.circle} Context Management`));
+  console.log('');
+  console.log(`  ${colors.brand.primary('/context budget')}   ${colors.tertiary('Set token budget')}`);
+  console.log(`  ${colors.brand.primary('/context stats')}    ${colors.tertiary('Show context stats')}`);
+  console.log(`  ${colors.brand.primary('/context reset')}    ${colors.tertiary('Reset context config')}`);
+  console.log('');
+
+  console.log(colors.secondary(`${symbols.circle} Branching`));
+  console.log('');
+  console.log(`  ${colors.brand.primary('/branch create')}    ${colors.tertiary('Fork conversation')}`);
+  console.log(`  ${colors.brand.primary('/branch list')}      ${colors.tertiary('List all branches')}`);
+  console.log(`  ${colors.brand.primary('/branch switch')}    ${colors.tertiary('Switch branches')}`);
   console.log('');
 
   console.log(colors.secondary(`${symbols.circle} Planning`));
@@ -1364,6 +1491,540 @@ async function handleListPlansCommand(): Promise<void> {
   } catch (error) {
     displayError(
       error instanceof Error ? error.message : 'Failed to list plans'
+    );
+  }
+}
+
+/**
+ * Handle /snippet command in REPL
+ */
+async function handleSnippetCommand(
+  args: string[],
+  session: ChatSession
+): Promise<void> {
+  const {
+    createPrompt,
+    listPrompts,
+    getPrompt,
+    deletePrompt,
+    renderPrompt,
+    incrementPromptUsage,
+    searchPrompts,
+  } = await import('../prompts/index.js');
+
+  const subCommand = args[0]?.toLowerCase();
+
+  try {
+    switch (subCommand) {
+      case 'save': {
+        // /snippet save <name> <content> [--description "desc"] [--category cat]
+        if (args.length < 3) {
+          displayError('Usage: /snippet save <name> <content> [--description "desc"]');
+          console.log('');
+          console.log(colors.secondary('Example:'));
+          console.log(colors.tertiary('  /snippet save refactor "Refactor {{file}} to use {{pattern}}"'));
+          console.log('');
+          return;
+        }
+
+        const name = args[1]!;
+        const content = args[2]!;
+
+        // Parse optional flags
+        const descIndex = args.indexOf('--description');
+        const catIndex = args.indexOf('--category');
+        const description = descIndex !== -1 ? args[descIndex + 1] || '' : '';
+        const category = catIndex !== -1 ? args[catIndex + 1] : undefined;
+
+        const prompt = await createPrompt(name, content, description, category);
+
+        displaySuccess(`Prompt snippet "${name}" saved!`);
+        console.log('');
+        if (prompt.variables.length > 0) {
+          console.log(colors.secondary('Variables:'));
+          for (const variable of prompt.variables) {
+            console.log(`  ${colors.brand.primary(`{{${variable.name}}}`)} ${colors.dim('(required)')}`);
+          }
+          console.log('');
+        }
+        console.log(colors.tertiary(`Use: /snippet use ${name} ${prompt.variables.map(v => `${v.name}=value`).join(' ')}`));
+        console.log('');
+        break;
+      }
+
+      case 'list': {
+        const prompts = await listPrompts();
+
+        if (prompts.length === 0) {
+          displayInfo('No prompt snippets found');
+          console.log('');
+          console.log(colors.secondary('Create one:'));
+          console.log(colors.tertiary('  /snippet save <name> <content>'));
+          console.log('');
+          return;
+        }
+
+        console.log('');
+        console.log(gradients.brand('Prompt Snippets'));
+        console.log('');
+
+        for (const prompt of prompts) {
+          console.log(`${colors.brand.primary(prompt.name)} ${colors.dim(`(used ${prompt.usageCount}x)`)}`);
+          console.log(`  ${colors.tertiary(prompt.description || 'No description')}`);
+          if (prompt.variables.length > 0) {
+            console.log(`  ${colors.dim(`Variables: ${prompt.variables.map(v => v.name).join(', ')}`)}`);
+          }
+          console.log('');
+        }
+
+        console.log(colors.secondary('Commands:'));
+        console.log(`  ${colors.brand.primary('/snippet use <name>')} - Use a snippet`);
+        console.log(`  ${colors.brand.primary('/snippet delete <name>')} - Delete a snippet`);
+        console.log('');
+        break;
+      }
+
+      case 'use': {
+        if (args.length < 2) {
+          displayError('Usage: /snippet use <name> [key=value...]');
+          console.log('');
+          return;
+        }
+
+        const name = args[1]!;
+        const prompt = await getPrompt(name);
+
+        if (!prompt) {
+          displayError(`Prompt snippet not found: ${name}`);
+          console.log('');
+          console.log(colors.secondary('List snippets:'));
+          console.log(colors.tertiary('  /snippet list'));
+          console.log('');
+          return;
+        }
+
+        // Parse key=value pairs
+        const variables: Record<string, string> = {};
+        for (let i = 2; i < args.length; i++) {
+          const arg = args[i]!;
+          const [key, ...valueParts] = arg.split('=');
+          if (key && valueParts.length > 0) {
+            variables[key] = valueParts.join('=');
+          }
+        }
+
+        // Check for missing required variables
+        const missing = prompt.variables
+          .filter(v => v.required && !variables[v.name])
+          .map(v => v.name);
+
+        if (missing.length > 0) {
+          displayError(`Missing required variables: ${missing.join(', ')}`);
+          console.log('');
+          console.log(colors.secondary('Usage:'));
+          console.log(colors.tertiary(`  /snippet use ${name} ${prompt.variables.map(v => `${v.name}=value`).join(' ')}`));
+          console.log('');
+          return;
+        }
+
+        // Render and add to session
+        const rendered = renderPrompt(prompt, { variables });
+
+        await addMessage(session, {
+          role: 'user',
+          content: rendered,
+        });
+
+        // Increment usage count
+        await incrementPromptUsage(name);
+
+        console.log('');
+        displayUserMessage(rendered);
+        console.log('');
+        displaySuccess('Snippet added to conversation');
+        console.log('');
+        break;
+      }
+
+      case 'delete': {
+        if (args.length < 2) {
+          displayError('Usage: /snippet delete <name>');
+          return;
+        }
+
+        const name = args[1]!;
+        const deleted = await deletePrompt(name);
+
+        if (deleted) {
+          displaySuccess(`Prompt snippet "${name}" deleted`);
+        } else {
+          displayError(`Prompt snippet not found: ${name}`);
+        }
+        console.log('');
+        break;
+      }
+
+      case 'search': {
+        if (args.length < 2) {
+          displayError('Usage: /snippet search <query>');
+          return;
+        }
+
+        const query = args.slice(1).join(' ');
+        const results = await searchPrompts(query);
+
+        if (results.length === 0) {
+          displayInfo(`No snippets found matching: ${query}`);
+          console.log('');
+          return;
+        }
+
+        console.log('');
+        console.log(gradients.brand(`Search Results: ${query}`));
+        console.log('');
+
+        for (const prompt of results) {
+          console.log(`${colors.brand.primary(prompt.name)} ${colors.dim(`(used ${prompt.usageCount}x)`)}`);
+          console.log(`  ${colors.tertiary(prompt.description || 'No description')}`);
+          console.log('');
+        }
+
+        console.log(colors.dim(`Found ${results.length} snippet${results.length > 1 ? 's' : ''}`));
+        console.log('');
+        break;
+      }
+
+      default:
+        displayError('Unknown snippet command');
+        console.log('');
+        console.log(colors.secondary('Available commands:'));
+        console.log(`  ${colors.brand.primary('/snippet save <name> <content>')} - Save a new snippet`);
+        console.log(`  ${colors.brand.primary('/snippet list')} - List all snippets`);
+        console.log(`  ${colors.brand.primary('/snippet use <name>')} - Use a snippet`);
+        console.log(`  ${colors.brand.primary('/snippet delete <name>')} - Delete a snippet`);
+        console.log(`  ${colors.brand.primary('/snippet search <query>')} - Search snippets`);
+        console.log('');
+        break;
+    }
+  } catch (error) {
+    displayError(
+      error instanceof Error ? error.message : 'Failed to execute snippet command'
+    );
+  }
+}
+
+/**
+ * Handle /context command in REPL
+ */
+async function handleContextCommand(
+  args: string[],
+  session: ChatSession
+): Promise<void> {
+  const {
+    getDefaultContextConfig,
+    addContextRule,
+    setTokenBudget,
+    getContextStats,
+  } = await import('../context/index.js');
+
+  // Initialize context config if not exists
+  if (!session.contextConfig) {
+    session.contextConfig = getDefaultContextConfig();
+  }
+
+  const subCommand = args[0]?.toLowerCase();
+
+  try {
+    switch (subCommand) {
+      case 'include': {
+        if (args.length < 2) {
+          displayError('Usage: /context include <pattern>');
+          console.log('');
+          console.log(colors.secondary('Example:'));
+          console.log(colors.tertiary('  /context include src/**/*.ts'));
+          console.log('');
+          return;
+        }
+
+        const pattern = args[1]!;
+        session.contextConfig = addContextRule(session.contextConfig, 'include', pattern);
+        await saveSession(session);
+
+        displaySuccess(`Added include rule: ${pattern}`);
+        console.log('');
+        break;
+      }
+
+      case 'exclude': {
+        if (args.length < 2) {
+          displayError('Usage: /context exclude <pattern>');
+          console.log('');
+          console.log(colors.secondary('Example:'));
+          console.log(colors.tertiary('  /context exclude **/*.test.ts'));
+          console.log('');
+          return;
+        }
+
+        const pattern = args[1]!;
+        session.contextConfig = addContextRule(session.contextConfig, 'exclude', pattern);
+        await saveSession(session);
+
+        displaySuccess(`Added exclude rule: ${pattern}`);
+        console.log('');
+        break;
+      }
+
+      case 'budget': {
+        if (args.length < 2) {
+          displayError('Usage: /context budget <tokens|clear>');
+          console.log('');
+          console.log(colors.secondary('Examples:'));
+          console.log(colors.tertiary('  /context budget 4000  # Set max tokens'));
+          console.log(colors.tertiary('  /context budget clear # Remove limit'));
+          console.log('');
+          return;
+        }
+
+        const budgetArg = args[1]!;
+        if (budgetArg === 'clear') {
+          session.contextConfig = setTokenBudget(session.contextConfig, undefined);
+          displaySuccess('Token budget cleared');
+        } else {
+          const budget = parseInt(budgetArg, 10);
+          if (isNaN(budget) || budget <= 0) {
+            displayError('Budget must be a positive number');
+            return;
+          }
+          session.contextConfig = setTokenBudget(session.contextConfig, budget);
+          displaySuccess(`Token budget set to ${budget}`);
+        }
+
+        await saveSession(session);
+        console.log('');
+        break;
+      }
+
+      case 'stats': {
+        const stats = getContextStats(session.messages, session.contextConfig);
+
+        console.log('');
+        console.log(gradients.brand('Context Statistics'));
+        console.log('');
+
+        console.log(`${colors.brand.primary('Total Messages:')} ${stats.totalMessages}`);
+        console.log(`${colors.brand.primary('Included Messages:')} ${stats.includedMessages}`);
+        console.log(`${colors.brand.primary('Estimated Tokens:')} ${stats.estimatedTokens}`);
+
+        if (session.contextConfig.tokenBudget) {
+          const percentage = Math.round((stats.estimatedTokens / session.contextConfig.tokenBudget) * 100);
+          console.log(`${colors.brand.primary('Budget Usage:')} ${percentage}% (${stats.estimatedTokens}/${session.contextConfig.tokenBudget})`);
+        }
+
+        console.log(`${colors.brand.primary('Active Rules:')} ${stats.rulesApplied}`);
+        console.log('');
+
+        if (session.contextConfig.rules.length > 0) {
+          console.log(colors.secondary('Rules:'));
+          for (let i = 0; i < session.contextConfig.rules.length; i++) {
+            const rule = session.contextConfig.rules[i]!;
+            const icon = rule.type === 'include' ? '✓' : '✗';
+            console.log(`  ${i + 1}. ${colors.tertiary(icon)} ${rule.type} ${colors.dim(rule.pattern)}`);
+          }
+          console.log('');
+        }
+        break;
+      }
+
+      case 'reset': {
+        session.contextConfig = getDefaultContextConfig();
+        await saveSession(session);
+
+        displaySuccess('Context configuration reset to defaults');
+        console.log('');
+        break;
+      }
+
+      default:
+        displayError('Unknown context command');
+        console.log('');
+        console.log(colors.secondary('Available commands:'));
+        console.log(`  ${colors.brand.primary('/context include <pattern>')} - Include files matching pattern`);
+        console.log(`  ${colors.brand.primary('/context exclude <pattern>')} - Exclude files matching pattern`);
+        console.log(`  ${colors.brand.primary('/context budget <tokens>')} - Set token budget`);
+        console.log(`  ${colors.brand.primary('/context stats')} - Show context statistics`);
+        console.log(`  ${colors.brand.primary('/context reset')} - Reset to defaults`);
+        console.log('');
+        break;
+    }
+  } catch (error) {
+    displayError(
+      error instanceof Error ? error.message : 'Failed to execute context command'
+    );
+  }
+}
+
+/**
+ * Handle /branch command in REPL
+ */
+async function handleBranchCommand(
+  args: string[],
+  session: ChatSession
+): Promise<void> {
+  const {
+    initializeBranches,
+    createBranch,
+    switchBranch,
+    listBranches,
+    deleteBranch,
+    getCurrentBranch,
+  } = await import('../branches/index.js');
+
+  // Initialize branch metadata if not exists
+  if (!session.branchMetadata) {
+    session.branchMetadata = initializeBranches(session.messages);
+  }
+
+  const subCommand = args[0]?.toLowerCase();
+
+  try {
+    switch (subCommand) {
+      case 'create': {
+        if (args.length < 2) {
+          displayError('Usage: /branch create <name>');
+          console.log('');
+          console.log(colors.secondary('Example:'));
+          console.log(colors.tertiary('  /branch create alternative-approach'));
+          console.log('');
+          return;
+        }
+
+        const name = args.slice(1).join(' ');
+        session.branchMetadata = createBranch(session.branchMetadata, name, session.messages);
+        await saveSession(session);
+
+        displaySuccess(`Created and switched to new branch: ${name}`);
+        console.log(colors.dim(`  Branch ID: ${session.branchMetadata.currentBranchId.substring(0, 8)}...`));
+        console.log('');
+        break;
+      }
+
+      case 'list': {
+        const branches = listBranches(session.branchMetadata);
+
+        console.log('');
+        console.log(gradients.brand('Conversation Branches'));
+        console.log('');
+
+        for (const branch of branches) {
+          const isActive = branch.isActive;
+          const icon = isActive ? '◉' : '○';
+          const idShort = branch.id === 'main' ? 'main' : branch.id.substring(0, 8) + '...';
+
+          console.log(`${isActive ? colors.brand.primary(icon) : colors.dim(icon)} ${isActive ? colors.secondary(branch.name) : colors.dim(branch.name)}`);
+          console.log(`  ${colors.dim(`ID: ${idShort} | ${branch.messages.length} messages | Created: ${new Date(branch.createdAt).toLocaleDateString()}`)}`);
+          console.log('');
+        }
+
+        console.log(colors.secondary('Commands:'));
+        console.log(`  ${colors.brand.primary('/branch switch <id>')} - Switch to a branch`);
+        console.log(`  ${colors.brand.primary('/branch create <name>')} - Create new branch`);
+        console.log('');
+        break;
+      }
+
+      case 'switch': {
+        if (args.length < 2) {
+          displayError('Usage: /branch switch <branch-id>');
+          console.log('');
+          console.log(colors.secondary('Tip: Use /branch list to see all branches'));
+          console.log('');
+          return;
+        }
+
+        const branchIdOrName = args[1]!;
+
+        // Find branch by ID or name
+        const allBranches = listBranches(session.branchMetadata);
+        const targetBranch = allBranches.find(
+          (b) => b.id === branchIdOrName || b.id.startsWith(branchIdOrName) || b.name === branchIdOrName
+        );
+
+        if (!targetBranch) {
+          displayError(`Branch not found: ${branchIdOrName}`);
+          console.log('');
+          console.log(colors.secondary('Available branches:'));
+          for (const b of allBranches) {
+            console.log(`  ${colors.tertiary(b.name)} ${colors.dim(`(${b.id.substring(0, 8)}...)`)}`);
+          }
+          console.log('');
+          return;
+        }
+
+        const result = switchBranch(session.branchMetadata, targetBranch.id);
+        session.branchMetadata = result.metadata;
+        session.messages = result.messages;
+        await saveSession(session);
+
+        displaySuccess(`Switched to branch: ${targetBranch.name}`);
+        console.log(colors.dim(`  ${targetBranch.messages.length} messages in this branch`));
+        console.log('');
+        break;
+      }
+
+      case 'delete': {
+        if (args.length < 2) {
+          displayError('Usage: /branch delete <branch-id>');
+          return;
+        }
+
+        const branchIdOrName = args[1]!;
+
+        // Find branch by ID or name
+        const allBranches = listBranches(session.branchMetadata);
+        const targetBranch = allBranches.find(
+          (b) => b.id === branchIdOrName || b.id.startsWith(branchIdOrName) || b.name === branchIdOrName
+        );
+
+        if (!targetBranch) {
+          displayError(`Branch not found: ${branchIdOrName}`);
+          return;
+        }
+
+        session.branchMetadata = deleteBranch(session.branchMetadata, targetBranch.id);
+        await saveSession(session);
+
+        displaySuccess(`Deleted branch: ${targetBranch.name}`);
+        console.log('');
+        break;
+      }
+
+      case 'current': {
+        const current = getCurrentBranch(session.branchMetadata);
+        if (current) {
+          console.log('');
+          console.log(colors.secondary('Current Branch:'));
+          console.log(`  ${colors.brand.primary(current.name)}`);
+          console.log(`  ${colors.dim(`ID: ${current.id === 'main' ? 'main' : current.id.substring(0, 8) + '...'} | ${current.messages.length} messages`)}`);
+          console.log('');
+        }
+        break;
+      }
+
+      default:
+        displayError('Unknown branch command');
+        console.log('');
+        console.log(colors.secondary('Available commands:'));
+        console.log(`  ${colors.brand.primary('/branch create <name>')} - Create new branch from current state`);
+        console.log(`  ${colors.brand.primary('/branch list')} - List all branches`);
+        console.log(`  ${colors.brand.primary('/branch switch <id>')} - Switch to a different branch`);
+        console.log(`  ${colors.brand.primary('/branch delete <id>')} - Delete a branch`);
+        console.log(`  ${colors.brand.primary('/branch current')} - Show current branch`);
+        console.log('');
+        break;
+    }
+  } catch (error) {
+    displayError(
+      error instanceof Error ? error.message : 'Failed to execute branch command'
     );
   }
 }

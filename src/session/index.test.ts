@@ -2,7 +2,7 @@
  * Session management tests
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import { homedir } from 'os';
@@ -16,6 +16,18 @@ import {
 } from './index.js';
 
 const TEST_SESSIONS_DIR = path.join(homedir(), '.ollama-cli-test', 'sessions');
+
+// Mock the config module to use test directory
+vi.mock('../config/index.js', async () => {
+  const actual = await vi.importActual<typeof import('../config/index.js')>('../config/index.js');
+  return {
+    ...actual,
+    getSessionsDir: () => TEST_SESSIONS_DIR,
+    ensureSessionsDir: async () => {
+      await fs.mkdir(TEST_SESSIONS_DIR, { recursive: true });
+    },
+  };
+});
 
 describe('Session Management', () => {
   beforeEach(async () => {

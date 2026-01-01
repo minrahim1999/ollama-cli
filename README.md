@@ -58,11 +58,12 @@ A professional, feature-rich command-line interface for Ollama - chat with AI mo
 - **Auto-Planning**: Enabled by default for complex requests
 
 ### ⚡ Quick-Win Features
+- **Interactive Command Autocomplete**: Type "/" to see all REPL commands with real-time filtering (NEW!)
 - **Code Execution**: Run Python, JavaScript, TypeScript, and Shell code snippets directly in chat
 - **Model Comparison**: Compare responses from multiple models side-by-side with performance metrics
 - **Pipe Mode**: Pipe command output directly to ask command (`git diff | ollama-cli ask "review"`)
 - **Syntax Highlighting**: Automatic code block highlighting with language-specific colors
-- **Keyboard Shortcuts**: Ctrl+K/L (clear screen), Ctrl+U (clear line), and more
+- **Keyboard Shortcuts**: Ctrl+K/L (clear screen), Ctrl+U (clear line), "/" for command help
 
 ### 🚀 High-Impact Features
 - **Codebase Indexing**: Build searchable index of all functions, classes, and symbols with fuzzy search
@@ -73,6 +74,39 @@ A professional, feature-rich command-line interface for Ollama - chat with AI mo
 - **Database Tools**: Execute SQL queries and inspect SQLite database schemas
 - **RAG System**: Vector embeddings for semantic search and context retrieval
 - **API Testing**: HTTP client with response validation and test suites
+
+### 🎯 Agent System (NEW!)
+- **Framework-Specific Agents**: Create specialized AI agents for Laravel, React, Django, etc.
+- **Markdown Definitions**: Agent configurations stored in readable .md files
+- **AI Auto-Generation**: Let AI create full agent definitions from descriptions
+- **Manual Templates**: Edit pre-filled templates for custom agents
+- **Dual Storage**: Global (`~/.ollama-cli/agents/`) or project-specific (`.ollama/agents/`)
+- **Enhanced Navigation**: Arrow keys (↑↓) for all selections - no number entry needed
+- **Full Management**: List, create, show, edit, and delete agents
+- **Chat Integration**: Use agents with `ollama-cli chat --agent <name>`
+
+**Example: Create a Laravel Developer Agent**
+```bash
+# Interactive creation with AI auto-generation
+ollama-cli agent create
+# Agent name: laravel-developer
+# Description: Laravel development expert
+# Framework: laravel
+# Language: php
+# → Auto-generate using AI (arrow keys to select)
+# → Global (available in all projects)
+
+# Use the agent
+ollama-cli chat --agent laravel-developer
+ollama-cli --agent laravel-developer
+```
+
+**Keyboard Navigation:**
+- Use **↑↓** arrow keys to navigate
+- **Space** to toggle checkboxes
+- **Enter** to confirm
+- **Escape** to cancel
+- No manual number entry required!
 
 ## Installation
 
@@ -85,12 +119,38 @@ npm install -g ollama-cli
 - Node.js 20 or higher
 - [Ollama](https://ollama.ai) installed and running locally
 
-## Quick Start
+## First Run Setup
+
+On first run, ollama-cli will automatically verify that required models are installed:
 
 ```bash
 # Start Ollama server (if not already running)
 ollama serve
 
+# Run ollama-cli - it will guide you through setup
+ollama-cli
+```
+
+**The setup will check for:**
+- ✅ Ollama connection
+- ✅ Required chat model (default: llama3.2)
+- ⚠️ Embedding model for RAG (optional: nomic-embed-text)
+
+**If models are missing, ollama-cli can automatically download them:**
+- You'll be asked for permission before downloading (models can be 1-10 GB)
+- Download progress is shown with percentage and file size
+- You can decline and install manually with `ollama pull llama3.2`
+
+**Manual setup commands:**
+```bash
+ollama-cli setup init    # Re-run setup
+ollama-cli setup status  # Check setup status
+ollama-cli setup reset   # Reset setup state
+```
+
+## Quick Start
+
+```bash
 # Start an interactive chat session
 ollama-cli chat
 
@@ -160,6 +220,41 @@ Options:
 
 *Other:*
 - `/models` - List available models
+
+**💡 Interactive Command Autocomplete:**
+
+Type `/` to trigger smart autocomplete with real-time filtering:
+
+```bash
+# In chat, type "/"
+You: /
+
+# Shows all commands with navigation
+Commands (use ↑↓ to navigate, Tab/Enter to select, Esc to cancel):
+❯ /help - Show help
+  /new - Start new conversation
+  /tools - List all tools
+  /export - Export conversation
+    /export [format] [filename]
+  ... and 20 more
+
+# Filter by typing more
+You: /exp
+
+Commands:
+❯ /export - Export conversation
+    /export [format] [filename]
+
+# Use ↑↓ to navigate, Tab/Enter to select
+```
+
+**Features:**
+- Real-time filtering as you type
+- Shows command descriptions and usage
+- Keyboard navigation with arrow keys
+- Default selection on top match
+- Escape to cancel
+- Backspace to refine search
 
 **Keyboard Shortcuts:**
 - `Ctrl+K` or `Ctrl+L` - Clear screen (keeps conversation history)
@@ -545,6 +640,40 @@ ollama-cli rag stats
 - Better AI context from large codebases
 - Document retrieval for assistance
 - Uses Ollama's embedding models (nomic-embed-text)
+
+### `setup`
+
+Manage first-run setup and model verification.
+
+```bash
+ollama-cli setup <command>
+
+Commands:
+  init                    Run first-time setup
+  status                  Show setup status
+  reset                   Reset setup state
+```
+
+**Examples:**
+```bash
+# Check setup status
+ollama-cli setup status
+
+# Re-run setup
+ollama-cli setup init
+
+# Reset and start fresh
+ollama-cli setup reset
+```
+
+**Security Features:**
+- Automatic model verification on first run
+- Optional automatic model download with user permission
+- Download progress tracking with size and percentage
+- Periodic model availability checks (every 7 days)
+- Prevents running without required models
+- Clear error messages with installation instructions
+- Respects user storage space with explicit consent
 
 ### `api`
 

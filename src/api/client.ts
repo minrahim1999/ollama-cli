@@ -188,4 +188,73 @@ export class OllamaClient {
       throw new Error('Unknown error occurred');
     }
   }
+
+  /**
+   * Pull a model from Ollama registry
+   */
+  async pullModel(
+    modelName: string,
+    onProgress?: (progress: { status: string; completed?: number; total?: number; digest?: string }) => void
+  ): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/pull`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: modelName,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to pull model: ${response.statusText}`);
+    }
+
+    if (!response.body) {
+      throw new Error('No response body');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(line => line.trim());
+
+        for (const line of lines) {
+          try {
+            const progress = JSON.parse(line) as {
+              status: string;
+              completed?: number;
+              total?: number;
+              digest?: string;
+              error?: string;
+            };
+
+            if (onProgress) {
+              onProgress(progress);
+            }
+
+            // Check for errors in the response
+            if (progress.error) {
+              throw new Error(progress.error);
+            }
+          } catch (e) {
+            // Ignore JSON parse errors for incomplete chunks
+            if (e instanceof Error && !e.message.includes('Unexpected')) {
+              throw e;
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
 }

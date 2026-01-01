@@ -1,0 +1,24 @@
+echo "🔍 Running pre-commit checks..."
+
+# Run build
+echo "📦 Building project..."
+npm run build || {
+  echo "❌ Build failed. Please fix errors before committing."
+  exit 1
+}
+
+# Run tests
+echo "🧪 Running tests..."
+npm test -- --run || {
+  echo "❌ Tests failed. Please fix failing tests before committing."
+  exit 1
+}
+
+# Run linter
+echo "🔎 Running linter..."
+npm run lint || {
+  echo "⚠️  Linting issues found. Consider fixing them."
+  # Don't exit on lint errors, just warn
+}
+
+echo "✅ All pre-commit checks passed!"
