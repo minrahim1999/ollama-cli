@@ -35,6 +35,16 @@ import {
   // shouldAutoApproveTool,
 } from '../modes/permission.js';
 import {
+  cycleOutputStyle,
+  getStyleDescription,
+  // getCurrentStyle, // TODO: Display current style in prompt or status
+} from '../modes/output-styles.js';
+import {
+  augmentMessagesForVerbose,
+  // formatVerboseResponse, // TODO: Use for post-processing verbose responses
+} from '../modes/verbose.js';
+import { interactiveRewind } from '../rewind/index.js';
+import {
   displayWelcome,
   displayCodingAssistantWelcome,
   displayError,
@@ -87,7 +97,10 @@ interface ChatOptions {
 /**
  * Set up custom keyboard shortcuts for readline
  */
-function setupKeyboardShortcuts(rl: readline.Interface): void {
+function setupKeyboardShortcuts(
+  rl: readline.Interface,
+  getSession: () => ChatSession
+): void {
   // Enable keypress events
   if (process.stdin.isTTY) {
     readline.emitKeypressEvents(process.stdin, rl);
@@ -144,6 +157,60 @@ function setupKeyboardShortcuts(rl: readline.Interface): void {
         console.log('');
         rl.prompt();
         return;
+      }
+
+      // Ctrl+Y: Cycle output styles
+      if (key.ctrl && key.name === 'y') {
+        const newStyle = cycleOutputStyle();
+        const description = getStyleDescription(newStyle);
+        console.log('');
+        console.log(chalk.cyan(`Output style: ${description}`));
+        console.log('');
+        rl.prompt();
+        return;
+      }
+
+      // Esc+Esc: Rewind capability (roll back code and conversation)
+      // Track Esc key presses
+      if (key.name === 'escape') {
+        const now = Date.now();
+        const lastEscape = (rl as unknown as Record<string, unknown>).lastEscapeTime as number | undefined;
+
+        if (lastEscape && now - lastEscape < 500) {
+          // Double Esc detected within 500ms
+          console.log('');
+          console.log(chalk.cyan('⏪ Initiating rewind...'));
+          console.log('');
+
+          // Trigger rewind
+          (async () => {
+            try {
+              // Get current session from the getter
+              const currentSession = getSession();
+              const rewindedSession = await interactiveRewind(currentSession);
+              if (rewindedSession) {
+                // Update session reference
+                Object.assign(currentSession, rewindedSession);
+                await saveSession(currentSession);
+                console.log('');
+                displaySuccess('Rewind complete!');
+              }
+            } catch (error) {
+              displayError(`Rewind failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+            console.log('');
+            rl.prompt();
+          })().catch(() => {
+            // Error already handled
+          });
+
+          // Reset escape tracking
+          (rl as unknown as Record<string, unknown>).lastEscapeTime = 0;
+          return;
+        }
+
+        // Store this escape press
+        (rl as unknown as Record<string, unknown>).lastEscapeTime = now;
       }
 
       // Trigger autocomplete when "/" is typed on an empty line
@@ -332,7 +399,7 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
   });
 
   // Set up custom keyboard shortcuts
-  setupKeyboardShortcuts(rl);
+  setupKeyboardShortcuts(rl, () => session);
 
   let isProcessing = false;
   let isExiting = false;
@@ -392,9 +459,12 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
       let fullResponse = '';
       let isFirstChunk = true;
 
+      // Augment messages with verbose prompt if enabled
+      const messagesToSend = augmentMessagesForVerbose(session.messages);
+
       for await (const chunk of client.chat({
         model: session.model,
-        messages: session.messages,
+        messages: messagesToSend,
       })) {
         const formattedChunk = formatStreamingChunk(chunk, isFirstChunk);
         process.stdout.write(formattedChunk);
@@ -500,9 +570,12 @@ async function handleToolCall(
       let fullResponse = '';
       let isFirstChunk = true;
 
+      // Augment messages with verbose prompt if enabled
+      const messagesToSend2 = augmentMessagesForVerbose(session.messages);
+
       for await (const chunk of client.chat({
         model: session.model,
-        messages: session.messages,
+        messages: messagesToSend2,
       })) {
         if (isFirstChunk) {
           clearThinking();
@@ -1034,6 +1107,8 @@ function displayEnhancedHelp(toolsEnabled: boolean): void {
   console.log('');
   console.log(`  ${colors.brand.primary('Shift+Tab')}      ${colors.tertiary('Cycle permission modes (⏵ → ⏵⏵ → ⏸)')}`);
   console.log(`  ${colors.brand.primary('Ctrl+O')}         ${colors.tertiary('Toggle verbose mode (extended thinking)')}`);
+  console.log(`  ${colors.brand.primary('Ctrl+Y')}         ${colors.tertiary('Cycle output styles (Default → Minimal → Markdown → JSON)')}`);
+  console.log(`  ${colors.brand.primary('Esc+Esc')}        ${colors.tertiary('⏪ Rewind code and conversation')}`);
   console.log(`  ${colors.brand.primary('Ctrl+K/L')}       ${colors.tertiary('Clear screen')}`);
   console.log(`  ${colors.brand.primary('Ctrl+U')}         ${colors.tertiary('Clear current line')}`);
   console.log('');

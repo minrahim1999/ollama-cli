@@ -31,14 +31,16 @@ vi.mock('../config/index.js', async () => {
 
 describe('Session Management', () => {
   beforeEach(async () => {
-    // Clean up test directory
+    // Clean up only the sessions directory, not the parent
     try {
-      await fs.rm(path.dirname(TEST_SESSIONS_DIR), { recursive: true });
+      await fs.rm(TEST_SESSIONS_DIR, { recursive: true });
     } catch {
       // Directory doesn't exist
     }
-    // Recreate test directory
+    // Recreate sessions directory with parent
     await fs.mkdir(TEST_SESSIONS_DIR, { recursive: true });
+    // Small delay to ensure filesystem is ready
+    await new Promise(resolve => setTimeout(resolve, 10));
   });
 
   afterEach(async () => {

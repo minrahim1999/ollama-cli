@@ -7,6 +7,9 @@ import { randomUUID } from 'crypto';
 import type { ConversationBranch, BranchMetadata } from '../types/branches.js';
 import type { Message } from '../types/index.js';
 
+// Export types for external use
+export type { BranchMetadata, ConversationBranch };
+
 /**
  * Initialize branch metadata for a session
  */

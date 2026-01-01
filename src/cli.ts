@@ -27,6 +27,7 @@ import { ragCommand } from './commands/rag.js';
 import { apiCommand } from './commands/api.js';
 import { setupCommand } from './commands/setup.js';
 import { agentCommand } from './commands/agent-cmd.js';
+import { headlessCommand } from './commands/headless.js';
 import { isSetupComplete, runSetup, verifyModels } from './setup/index.js';
 
 const program = new Command();
@@ -285,6 +286,22 @@ program
   .description('Manage specialized AI agents (list|create|show|delete|edit)')
   .action(async (command, args) => {
     await agentCommand(command, args);
+  });
+
+// Headless command (non-interactive)
+program
+  .command('headless [prompt]')
+  .description('Non-interactive execution for CI/CD pipelines')
+  .option('-m, --model <model>', 'Model to use')
+  .option('--base-url <url>', 'Ollama base URL')
+  .option('--system <prompt>', 'System prompt')
+  .option('--temperature <value>', 'Temperature (0.0-1.0)', parseFloat)
+  .option('--format <format>', 'Output format (json|text)', 'text')
+  .option('--timeout <ms>', 'Request timeout in milliseconds', parseInt)
+  .option('--file <path>', 'Read prompt from file')
+  .option('--batch', 'Batch mode: process multiple prompts (one per line)')
+  .action(async (prompt, options) => {
+    await headlessCommand(prompt, options);
   });
 
 // Init command

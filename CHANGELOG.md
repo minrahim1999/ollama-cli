@@ -5,6 +5,204 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-01-02
+
+### 🎯 Phase 2: Advanced Features
+
+#### Rewind Capability
+- **Time-travel debugging** - Roll back code and conversation to any previous state
+- **Esc+Esc shortcut** - Quick access to rewind interface
+- **Snapshot integration** - Revert file changes to previous snapshots
+- **Conversation branching** - Create branches from rewind points
+- **Smart rewind points** - Combines snapshots (file changes) with conversation checkpoints
+- **Interactive selection** - Choose from timestamped list of rewind points
+- **Safe rollback** - Confirms before making changes
+
+**Features:**
+- Keyboard shortcut: Double-press Esc (within 500ms) to trigger rewind
+- Lists all available rewind points with descriptions
+- Shows snapshot details (reason, file count) and message previews
+- Reverts code changes via snapshot system
+- Truncates conversation history to selected point
+- Optional branch creation for alternative conversation paths
+- Clear confirmation prompts before executing rewind
+
+**Usage:**
+```bash
+# In chat session:
+# Press Esc+Esc to open rewind interface
+# Select from available rewind points:
+#   - 📸 Snapshots (file changes)
+#   - 💬 Conversation checkpoints (every 5 messages)
+# Confirm to revert code and/or conversation
+```
+
+#### Headless Mode
+- **Non-interactive execution** - Run prompts without interactive REPL
+- **CI/CD integration** - Perfect for automation and pipelines
+- **Multiple input methods** - Direct prompt, file, or stdin
+- **Batch processing** - Process multiple prompts sequentially
+- **Structured output** - JSON or plain text format
+- **Exit codes** - 0 for success, 1 for failure
+- **System prompts** - Custom instructions per execution
+
+**Features:**
+- Direct prompt: `ollama-cli headless "your prompt"`
+- File input: `ollama-cli headless --file prompts.txt`
+- Stdin support: `echo "prompt" | ollama-cli headless`
+- Batch mode: `ollama-cli headless --file prompts.txt --batch` (one per line)
+- JSON output: `ollama-cli headless "prompt" --format json`
+- Custom system prompt: `--system "You are an expert..."`
+- Temperature control: `--temperature 0.7`
+- Timeout configuration: `--timeout 60000`
+
+**Usage Examples:**
+```bash
+# Direct prompt
+ollama-cli headless "Explain quantum computing"
+
+# From file
+ollama-cli headless --file question.txt
+
+# Batch processing
+ollama-cli headless --file prompts.txt --batch --format json
+
+# In CI/CD pipeline
+if ollama-cli headless "Review code for security issues" --format text; then
+  echo "No issues found"
+else
+  echo "Security concerns detected"
+  exit 1
+fi
+
+# With stdin
+git diff | ollama-cli headless --system "Review this code change"
+```
+
+#### Output Styles System
+- **Customizable formatting** - Choose how responses are displayed
+- **Four style modes** - Default, Minimal, Markdown, JSON
+- **Ctrl+Y shortcut** - Quick cycling through styles
+- **Visual consistency** - Maintains style across all outputs
+- **Copy-friendly** - Easy to extract responses for other tools
+
+**Styles:**
+- **Default** - Formatted with boxes and colors (current style)
+- **Minimal** - Plain text, no decorations
+- **Markdown** - Clean markdown formatting
+- **JSON** - Structured JSON output for parsing
+
+**Features:**
+- Keyboard shortcut: Ctrl+Y to cycle styles
+- Applies to user messages, assistant responses, tool execution, errors
+- Configurable per session
+- Shows current style when switching
+- Preserves functionality across all styles
+
+**Usage:**
+```bash
+# In chat session:
+# Press Ctrl+Y to cycle through output styles
+# Default → Minimal → Markdown → JSON → Default
+
+# Styles preview:
+# Default:    ╭─ 🤖 Assistant
+#             │ Response here
+#             ╰─
+#
+# Minimal:    Assistant: Response here
+#
+# Markdown:   **Assistant:** Response here
+#
+# JSON:       {"role": "assistant", "content": "Response here"}
+```
+
+#### Extended Thinking / Verbose Mode
+- **Detailed reasoning** - See step-by-step thought process
+- **Ctrl+O toggle** - Enable/disable on the fly
+- **Enhanced system prompt** - Instructs model to show reasoning
+- **Structured responses** - Analysis, approach, implementation, validation
+- **Learning tool** - Understand how the AI solves problems
+
+**Features:**
+- Keyboard shortcut: Ctrl+O to toggle verbose mode
+- Augments system prompt to request detailed explanations
+- Model shows:
+  - Analysis of the task
+  - Planned solution approach
+  - Implementation details
+  - Validation steps
+  - Alternative considerations
+- Helps users learn from AI reasoning
+- Useful for complex problem-solving
+
+**Usage:**
+```bash
+# In chat session:
+# Press Ctrl+O to enable verbose mode
+# Model will now provide detailed step-by-step reasoning
+# Press Ctrl+O again to disable
+
+# Example verbose response structure:
+# **Analysis**: Understanding the requirements...
+# **Approach**: I'll solve this by...
+# **Implementation**: Here's the code...
+# **Validation**: This works because...
+```
+
+### ⌨️ Updated Keyboard Shortcuts
+
+All new shortcuts added in Phase 2:
+
+| Shortcut | Action | Description |
+|----------|--------|-------------|
+| `Shift+Tab` | Cycle permission modes | ⏵ → ⏵⏵ → ⏸ |
+| `Ctrl+O` | Toggle verbose mode | Extended thinking on/off |
+| `Ctrl+Y` | Cycle output styles | Default → Minimal → Markdown → JSON |
+| `Esc+Esc` | Rewind | Roll back code and conversation |
+| `Ctrl+K/L` | Clear screen | (existing) |
+| `Ctrl+U` | Clear line | (existing) |
+
+### 🏗️ Architecture Updates
+
+**New Modules:**
+- `src/rewind/index.ts` - Rewind capability implementation
+- `src/modes/headless.ts` - Headless execution engine
+- `src/modes/output-styles.ts` - Output formatting system
+- `src/modes/verbose.ts` - Extended thinking integration
+- `src/commands/headless.ts` - Headless CLI command
+
+**Enhanced Modules:**
+- `src/commands/chat-enhanced.ts` - Integrated all Phase 2 features
+- `src/branches/index.ts` - Exported BranchMetadata type
+- `src/cli.ts` - Added headless command
+
+### 📚 Technical Details
+
+**Rewind System:**
+- Combines snapshot system with conversation history
+- Creates rewind points every 5 assistant messages
+- Integrates with branching for alternative conversation paths
+- Uses interactive selection with keyboard navigation
+
+**Headless Mode:**
+- Non-blocking async generator for streaming
+- Proper error handling with exit codes
+- Supports both single and batch execution
+- Temperature and timeout configuration
+
+**Output Styles:**
+- Global state management for current style
+- Format functions for each message type
+- Cycle through styles with single keypress
+- Maintains visual consistency
+
+**Verbose Mode:**
+- Augments system prompt dynamically
+- Preserves original messages
+- Applies only when mode is enabled
+- Structured response format guidance
+
 ## [2.5.0] - 2026-01-02
 
 ### 🔧 Setup & Configuration
