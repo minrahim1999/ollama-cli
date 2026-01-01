@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-01-02
+
+### 🔧 Setup & Configuration
+
+#### Interactive Base URL Configuration
+- **First-run URL prompt** - Ask users for Ollama base URL during setup
+- **Default or custom choice** - Quick selection between localhost or custom server
+- **URL validation** - Format validation and protocol checking (http/https)
+- **Connection testing** - Verifies Ollama is reachable before saving
+- **Global configuration** - Saves to `~/.ollama-cli/config.json` (no .env files needed)
+- **Easy management** - Change URL anytime with `ollama-cli config set baseUrl <url>`
+
+**Features:**
+- Interactive prompt during first-run setup
+- Validates URL format and removes trailing slashes/api suffix
+- Tests connection to Ollama server before saving
+- Saves configuration globally for all sessions
+- Supports both default (localhost:11434) and custom URLs
+- Clear error messages with troubleshooting steps
+- Config command support for baseUrl management
+
+**Setup Flow:**
+```bash
+# First run
+ollama-cli chat
+
+# Prompts:
+# Ollama Base URL Configuration
+#
+# Choose Ollama server:
+#   1. Use default (http://localhost:11434)
+#   2. Enter custom URL
+#
+# Select option (1-2): 1
+#
+# ✓ Connected to Ollama at http://localhost:11434
+# Configuration saved to ~/.ollama-cli/config.json
+```
+
+**Configuration Management:**
+```bash
+# View current base URL
+ollama-cli config get baseUrl
+
+# Change base URL
+ollama-cli config set baseUrl http://192.168.1.100:11434
+
+# View all configuration
+ollama-cli config list
+
+# Reset to defaults
+ollama-cli config reset
+```
+
+**Configuration Priority:**
+1. Environment variable: `OLLAMA_BASE_URL`
+2. Config file: `~/.ollama-cli/config.json`
+3. Default: `http://localhost:11434/api`
+
+**Benefits:**
+- ✅ No `.env` files needed - Cleaner project structure
+- ✅ Interactive setup - User-friendly first-run experience
+- ✅ Persistent configuration - Saved globally for all sessions
+- ✅ Easy management - Change settings with simple commands
+- ✅ Validation built-in - Catches errors before saving
+- ✅ Connection testing - Ensures Ollama is reachable
+
+### 🛠️ Technical Improvements
+- Enhanced config command to support `autoPlan` configuration key
+- Added URL validation with protocol checking
+- Improved setup flow with connection testing
+- Better error handling for network failures
+- Documentation moved to `docs/` folder for better organization
+
+### 📚 Documentation
+- Added `docs/BASE_URL_SETUP.md` - Complete feature documentation
+- Added `.ollama/` to `.gitignore` - Exclude project directories from git
+- Improved project organization with docs folder
+
 ## [2.4.0] - 2026-01-01
 
 ### 🎯 Core Enhancements

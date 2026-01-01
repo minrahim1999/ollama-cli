@@ -13,6 +13,7 @@ import { getDefaultAssistant, getAssistant } from '../assistants/index.js';
 import { loadAgent, getAgentSystemPrompt } from '../agents/manager.js';
 import { detectProjectContext, readProjectMd } from '../project/index.js';
 import { promptForPermissions } from '../project/permissions.js';
+import { updateProjectTimestamp } from '../project/update.js';
 import {
   createSession,
   loadSession,
@@ -339,6 +340,9 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
 
       displayAssistantMessageEnd();
 
+      // Update PROJECT.md timestamp if it exists
+      await updateProjectTimestamp(process.cwd());
+
       // Add assistant message to session
       await addMessage(session, {
         role: 'assistant',
@@ -447,6 +451,9 @@ async function handleToolCall(
       }
 
       displayAssistantMessageEnd();
+
+      // Update PROJECT.md timestamp if it exists
+      await updateProjectTimestamp(process.cwd());
 
       await addMessage(session, {
         role: 'assistant',
@@ -796,6 +803,9 @@ async function handleTestCommand(session: ChatSession, client: OllamaClient): Pr
       });
 
       displayAssistantMessageEnd();
+
+      // Update PROJECT.md timestamp if it exists
+      await updateProjectTimestamp(process.cwd());
     } else {
       console.log('');
       console.log(colors.success('All tests passed!'));

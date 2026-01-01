@@ -180,6 +180,49 @@ ollama-cli setup status  # Check setup status
 ollama-cli setup reset   # Reset setup state
 ```
 
+### Base URL Configuration
+
+During first-run setup, you'll be prompted to configure your Ollama server URL:
+
+```bash
+Ollama Base URL Configuration
+
+Choose Ollama server:
+  1. Use default (http://localhost:11434)
+  2. Enter custom URL
+
+Select option (1-2):
+```
+
+**Choose Option 1** if Ollama is running locally (most common)
+**Choose Option 2** if Ollama is on a different server or custom port
+
+**Features:**
+- ✅ No `.env` files needed
+- ✅ Interactive validation and connection testing
+- ✅ Saved globally to `~/.ollama-cli/config.json`
+- ✅ Easy to change later
+
+**Manage Configuration:**
+```bash
+# View current base URL
+ollama-cli config get baseUrl
+
+# Change to custom server
+ollama-cli config set baseUrl http://192.168.1.100:11434
+
+# View all configuration
+ollama-cli config list
+
+# Reset to defaults
+ollama-cli config reset
+```
+
+**Priority Order:**
+1. Environment variable: `OLLAMA_BASE_URL`
+2. Config file: `~/.ollama-cli/config.json`
+3. Default: `http://localhost:11434/api`
+
 ## Quick Start
 
 ```bash

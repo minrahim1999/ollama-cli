@@ -1089,6 +1089,10 @@ ollama-cli api test tests.json
 **Setup Flow:**
 1. Check if setup has been completed (reads setup.json)
 2. If first run:
+   - **Prompt for base URL** - Ask user for Ollama server URL (default or custom)
+   - **Validate URL** - Check format and remove trailing slashes/api suffix
+   - **Test connection** - Verify Ollama is reachable at the URL
+   - **Save configuration** - Store baseUrl in `~/.ollama-cli/config.json`
    - Test Ollama connection
    - List available models
    - Verify required models exist
@@ -1164,3 +1168,84 @@ await client.pullModel(modelName, (progress) => {
 - Default is Yes (press Enter to accept)
 - Can decline to install manually later
 - Non-blocking - respects user's choice
+### Base URL Configuration
+
+**Implementation:** `src/setup/index.ts` - `promptForBaseUrl()`, `testOllamaConnection()`
+
+**Interactive Prompt Flow:**
+1. Display base URL configuration screen
+2. Offer default (http://localhost:11434) or custom URL
+3. If custom selected:
+   - Prompt for URL input with validation
+   - Loop until valid URL provided
+   - Remove trailing slashes and `/api` suffix
+   - Validate protocol (http or https only)
+4. Test connection to Ollama server
+5. Save to `~/.ollama-cli/config.json` on success
+
+**Key Functions:**
+
+**promptForBaseUrl():**
+```typescript
+async function promptForBaseUrl(): Promise<string> {
+  // 1. Show selection: default vs custom
+  const choice = await select('Choose Ollama server:', [
+    'Use default (http://localhost:11434)',
+    'Enter custom URL'
+  ]);
+
+  // 2. Validate custom URL if selected
+  // 3. Return clean base URL (no trailing slash/api)
+}
+```
+
+**testOllamaConnection(baseUrl):**
+```typescript
+async function testOllamaConnection(baseUrl: string): Promise<boolean> {
+  // 1. Create temporary OllamaClient with baseUrl + '/api'
+  // 2. Call listModels() to test connection
+  // 3. Return true if successful, false otherwise
+}
+```
+
+**Validation Rules:**
+- Must be valid URL format
+- Protocol must be `http://` or `https://`
+- Automatically removes trailing `/`
+- Automatically removes `/api` suffix
+- Tests actual connection before saving
+
+**Configuration Storage:**
+- Saved to: `~/.ollama-cli/config.json`
+- Key: `baseUrl`
+- Format: `http://hostname:port/api`
+- Example: `http://localhost:11434/api`
+
+**Priority Hierarchy:**
+1. Environment variable: `OLLAMA_BASE_URL`
+2. Config file: `~/.ollama-cli/config.json` (set during setup)
+3. Default: `http://localhost:11434/api`
+
+**Config Management:**
+```bash
+# View current URL
+ollama-cli config get baseUrl
+
+# Change URL
+ollama-cli config set baseUrl http://192.168.1.100:11434
+
+# List all config
+ollama-cli config list
+
+# Reset to defaults
+ollama-cli config reset
+```
+
+**Benefits:**
+- No `.env` files needed (cleaner project)
+- Interactive validation prevents errors
+- Connection tested before saving
+- Easy to change later via config command
+- Supports remote Ollama servers
+- Global configuration for all sessions
+
