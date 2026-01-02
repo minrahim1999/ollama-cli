@@ -1,12 +1,12 @@
 {
   "name": "ollama-cli",
-  "version": "1.0.0",
+  "version": "2.8.0",
   "description": "Professional CLI for interacting with Ollama - chat, generate, and manage AI models from your terminal",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "ollama-cli": "./dist/cli.js"
+    "ollama-cli": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -32,10 +32,22 @@
     "chat",
     "command-line",
     "terminal",
-    "ai-assistant"
+    "ai-assistant",
+    "local-ai",
+    "code-generation",
+    "developer-tools",
+    "productivity"
   ],
-  "author": "",
+  "author": "minrahim1999",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/minrahim1999/ollama-cli.git"
+  },
+  "homepage": "https://github.com/minrahim1999/ollama-cli#readme",
+  "bugs": {
+    "url": "https://github.com/minrahim1999/ollama-cli/issues"
+  },
   "engines": {
     "node": ">=20.0.0"
   },

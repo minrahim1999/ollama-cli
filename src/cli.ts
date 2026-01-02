@@ -57,7 +57,7 @@ async function ensureSetup(): Promise<boolean> {
 program
   .name('ollama-cli')
   .description('AI Coding Assistant powered by Ollama')
-  .version('2.3.0')
+  .version('2.8.0')
   .option('-m, --model <model>', 'Model to use')
   .option('-s, --session <id>', 'Resume a specific session')
   .option('-a, --assistant <id>', 'Use specific assistant')
