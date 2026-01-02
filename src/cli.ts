@@ -30,6 +30,8 @@ import { agentCommand } from './commands/agent-cmd.js';
 import { headlessCommand } from './commands/headless.js';
 import { hooksCommand } from './commands/hooks.js';
 import { skillsCommand } from './commands/skills.js';
+import { analyticsCommand } from './commands/analytics.js';
+import { generateCommand } from './commands/generate.js';
 import { isSetupComplete, runSetup, verifyModels } from './setup/index.js';
 
 const program = new Command();
@@ -320,6 +322,25 @@ program
   .description('AI capability discovery (list|popular|stats|suggest)')
   .action(async (command, args) => {
     await skillsCommand(command, args);
+  });
+
+// Analytics command
+program
+  .command('analytics <command> [args...]')
+  .description('Usage analytics and insights (overview|tools|session|clear)')
+  .action(async (command, args) => {
+    await analyticsCommand(command, args);
+  });
+
+// Generate command
+program
+  .command('generate <command> [args...]')
+  .description('Code generation from templates (list|api|auth|crud|model|test|component)')
+  .option('--framework <framework>', 'Target framework (express, react, django, etc.)')
+  .option('--language <language>', 'Programming language (typescript, javascript, python, php)')
+  .option('--output <path>', 'Output directory')
+  .action(async (command, args, options) => {
+    await generateCommand(command, args, options);
   });
 
 // Init command

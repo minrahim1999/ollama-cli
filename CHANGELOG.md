@@ -5,6 +5,153 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-01-02
+
+### 🚀 Phase 4: Productivity & Scale
+
+#### Session Analytics
+- **Usage tracking** - Comprehensive analytics for sessions, tools, and commands
+- **Insights dashboard** - Overview of usage patterns, success rates, and performance
+- **Tool analytics** - Detailed reports for individual tools with error tracking
+- **Session reports** - Complete session breakdowns with metadata
+- **Peak usage detection** - Identify peak hours and usage trends
+- **Automatic tracking** - Transparent tracking integrated into chat system
+
+**Features:**
+- Track messages, tool executions, commands, and errors
+- Success rate monitoring and error analysis
+- Token usage estimation
+- Storage size and entry count management
+- Top tools, models, and commands ranking
+- Activity visualization by day
+
+**Usage:**
+```bash
+# View overview
+ollama-cli analytics overview
+
+# Tool-specific report
+ollama-cli analytics tools read_file
+
+# Session report
+ollama-cli analytics session <session-id>
+
+# Clear analytics
+ollama-cli analytics clear
+```
+
+#### Code Generation Templates
+- **Express API generator** - REST API scaffolding with TypeScript/JavaScript
+- **Authentication generator** - JWT auth with bcrypt hashing
+- **Validation support** - Joi schema integration
+- **Multiple methods** - GET, POST, PUT, DELETE endpoint generation
+- **Controller templates** - Pre-built business logic structure
+
+**Features:**
+- Framework-specific templates (Express, Fastify, React, Django, Flask, Laravel)
+- Language support (TypeScript, JavaScript, Python, PHP)
+- Customizable options (auth, validation, methods)
+- Automatic file structure creation
+- Post-generation instructions
+
+**Usage:**
+```bash
+# List generators
+ollama-cli generate list
+
+# Generate REST API
+ollama-cli generate api User --framework express --language typescript
+
+# Generate authentication
+ollama-cli generate auth --framework express --language typescript
+
+# Custom output path
+ollama-cli generate api Product --output ./src --framework express
+```
+
+#### Smart Caching Layer
+- **Hash-based caching** - SHA-256 keys for AI responses
+- **TTL support** - Configurable time-to-live (default: 7 days)
+- **Size limits** - Max cache size and entry count enforcement
+- **Hit tracking** - Monitor cache effectiveness
+- **Auto-cleanup** - Automatic expired entry removal
+- **LRU eviction** - Least recently used + lowest hits removal strategy
+
+**Features:**
+- Reduce latency for repeated queries
+- Cost savings by caching responses
+- Cache statistics and monitoring
+- Model-specific invalidation
+- Configurable cache options
+
+**Implementation:**
+```typescript
+import { getCache, setCache, getCacheStats } from './cache';
+
+// Get cached response
+const cached = await getCache({ model: 'llama3.2', prompt: 'Hello' });
+
+// Set cache with custom TTL
+await setCache(
+  { model: 'llama3.2', prompt: 'Hello' },
+  'Hi there!',
+  { ttl: 24 * 60 * 60 * 1000 } // 24 hours
+);
+
+// Get stats
+const stats = await getCacheStats();
+```
+
+#### PostgreSQL & MySQL Support
+- **PostgreSQL client** - Full schema inspection and query execution
+- **MySQL client** - Complete database operations support
+- **Connection string parsing** - Easy connection setup
+- **Schema introspection** - Tables, columns, indexes, foreign keys
+- **Lazy loading** - Install dependencies only when needed
+
+**Features:**
+- Query execution with parameter binding
+- Full schema information retrieval
+- Table metadata with relationships
+- Row count and statistics
+- Connection management
+
+**Usage:**
+```typescript
+import { createPostgresClient, createMySQLClient } from './database';
+
+// PostgreSQL
+const pg = createPostgresClient('postgresql://user:pass@localhost:5432/db');
+await pg.connect();
+const result = await pg.query('SELECT * FROM users WHERE id = $1', [1]);
+const schema = await pg.getSchema();
+
+// MySQL
+const mysql = createMySQLClient('mysql://user:pass@localhost:3306/db');
+await mysql.connect();
+const result = await mysql.query('SELECT * FROM users WHERE id = ?', [1]);
+```
+
+### 🏗️ Architecture Updates
+- Analytics tracking integrated into chat system
+- Generator registry for extensible templates
+- Cache layer with automatic limits enforcement
+- Database abstraction for multi-DB support
+
+### 📦 Dependencies
+```json
+{
+  "optional": {
+    "pg": "^8.x",
+    "@types/pg": "^8.x",
+    "mysql2": "^3.x",
+    "joi": "^17.x"
+  }
+}
+```
+
+**Note:** Database and validation packages are optional and installed on-demand.
+
 ## [2.7.0] - 2026-01-02
 
 ### 🎯 Phase 3: Automation & Intelligence

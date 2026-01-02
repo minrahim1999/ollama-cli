@@ -84,6 +84,15 @@ import type { CommitStyle } from '../types/git.js';
 import { shouldTriggerPlanning } from '../planning/detector.js';
 import { createPlan, listPlans } from '../planning/index.js';
 import { showCommandAutocomplete } from '../utils/command-autocomplete.js';
+import {
+  trackSessionStart,
+  trackSessionEnd,
+  trackMessageSent,
+  trackMessageReceived,
+  trackToolExecution,
+  trackCommand,
+  trackError,
+} from '../analytics/index.js';
 
 interface ChatOptions {
   model?: string;
@@ -327,6 +336,14 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
     sessionId: session.id,
   });
 
+  // Track session start in analytics
+  await trackSessionStart(
+    session.id,
+    model,
+    options.assistant,
+    agentName || undefined
+  );
+
   // Add system message from agent or assistant
   if (session.messages.length === 0) {
     // Use agent system prompt if agent is loaded, otherwise use assistant
@@ -460,6 +477,9 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
       content: trimmed,
     });
 
+    // Track message sent
+    await trackMessageSent(session.id, trimmed.length);
+
     // Trigger message:user hook
     await triggerHooks({
       event: 'message:user',
@@ -498,6 +518,9 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
         content: fullResponse,
       });
 
+      // Track message received
+      await trackMessageReceived(session.id, fullResponse.length);
+
       // Check if response contains tool call (if tools enabled)
       if (toolExecutor && fullResponse.includes('"tool":')) {
         await handleToolCall(fullResponse, session, client, toolExecutor, assistant);
@@ -506,8 +529,10 @@ export async function chatCommandEnhanced(options: ChatOptions): Promise<void> {
       console.log(''); // Add newline
       if (error instanceof Error) {
         displayError(error.message);
+        await trackError(session.id, 'chat_error', error.message);
       } else {
         displayError('An unknown error occurred');
+        await trackError(session.id, 'chat_error', 'Unknown error');
       }
     } finally {
       isProcessing = false;
@@ -567,7 +592,12 @@ async function handleToolCall(
 
     displayToolExecutionStart(toolCall.tool, toolCall.parameters);
 
+    const startTime = Date.now();
     const result = await toolExecutor.execute(toolCall);
+    const duration = Date.now() - startTime;
+
+    // Track tool execution
+    await trackToolExecution(session.id, toolCall.tool, duration, result.success);
 
     if (result.success) {
       const summary = summarizeToolResult(result.data);
@@ -707,6 +737,11 @@ async function handleCommand(
   const parts = command.slice(1).split(' ');
   const cmd = parts[0]?.toLowerCase();
   const args = parts.slice(1);
+
+  // Track command execution
+  if (cmd) {
+    await trackCommand(session.id, cmd);
+  }
 
   switch (cmd) {
     case 'help':
@@ -929,6 +964,7 @@ async function handleCommand(
 
     case 'exit':
     case 'quit':
+      await trackSessionEnd(session.id);
       await saveSession(session);
       console.log(chalk.grey('\nGoodbye!'));
       process.exit(0);
