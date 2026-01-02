@@ -107,6 +107,52 @@ A professional, feature-rich command-line interface for Ollama - chat with AI mo
 - **Prompt Search**: Search by name, content, tags, category
 - **Tag System**: Organize prompts with multiple tags
 
+### 📊 Productivity & Scale (v2.8.0)
+
+#### 📈 Session Analytics
+- **Usage Tracking**: Comprehensive analytics for sessions, tools, and commands
+- **Insights Dashboard**: Overview of usage patterns, success rates, and performance
+- **Tool Analytics**: Detailed reports for individual tools with error tracking
+- **Session Reports**: Complete session breakdowns with metadata
+- **Peak Usage Detection**: Identify peak hours and usage trends
+- **Storage**: `~/.ollama-cli/analytics.json` (automatically managed)
+
+```bash
+ollama-cli analytics overview              # Usage overview
+ollama-cli analytics tools read_file       # Tool-specific report
+ollama-cli analytics session <id>          # Session report
+ollama-cli analytics clear                 # Clear analytics data
+```
+
+#### 🏗️ Code Generation Templates
+- **Express API Generator**: REST API scaffolding with TypeScript/JavaScript
+- **Authentication Generator**: JWT auth with bcrypt hashing
+- **Validation Support**: Joi schema integration
+- **Multiple Methods**: GET, POST, PUT, DELETE endpoint generation
+- **Controller Templates**: Pre-built business logic structure
+- **Route Generation**: Express router setup with middleware
+
+```bash
+ollama-cli generate list                   # List all generators
+ollama-cli generate api User               # Generate REST API
+ollama-cli generate auth                   # Generate JWT auth
+```
+
+#### 🚀 Smart Caching Layer
+- **SHA-256 Hashing**: Secure cache key generation
+- **TTL Support**: Configurable expiration (default: 7 days)
+- **LRU Eviction**: Least Recently Used with hit count prioritization
+- **Size Limits**: 100MB max, 1000 entries
+- **Auto-Cleanup**: Runs every 24 hours
+- **Cache Stats**: Monitor hit rates and storage usage
+
+#### 🗄️ Database Support
+- **PostgreSQL Client**: Schema introspection and query execution
+- **MySQL Client**: Full query support with transaction handling
+- **Optional Dependencies**: Lazy loading with helpful error messages
+- **Connection Management**: Persistent connections with proper cleanup
+- **Schema Inspection**: Tables, columns, indexes, foreign keys
+
 ### 🎯 Agent System
 - **Framework-Specific Agents**: Create specialized AI agents for Laravel, React, Django, etc.
 - **Markdown Definitions**: Agent configurations stored in readable .md files

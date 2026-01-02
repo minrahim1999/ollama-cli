@@ -9,7 +9,7 @@
 
 ## Overview
 
-**Version:** 2.5.0
+**Version:** 2.8.0
 **Description:** Professional, feature-rich CLI for Ollama - chat with AI models, manage templates, execute code, plan implementations, and streamline your local LLM workflow from the terminal.
 
 **Key Features:**
@@ -24,6 +24,10 @@
 - Agent system with framework-specific AI assistants
 - Interactive command autocomplete and keyboard navigation
 - First-run setup with model verification and base URL configuration
+- **Session analytics** with usage tracking and insights (NEW v2.8.0)
+- **Code generation** templates for Express API and JWT auth (NEW v2.8.0)
+- **Smart caching** with SHA-256 hashing and LRU eviction (NEW v2.8.0)
+- **Database support** for PostgreSQL and MySQL (NEW v2.8.0)
 
 ## Project Structure
 
@@ -36,6 +40,9 @@ ollama-cli/
 │   ├── session/           # Conversation persistence
 │   ├── assistants/        # Assistant management
 │   ├── agents/            # Agent system (parser, manager, creator)
+│   ├── analytics/         # Session analytics & usage tracking (NEW v2.8.0)
+│   ├── cache/             # Smart caching layer with LRU eviction (NEW v2.8.0)
+│   ├── generators/        # Code generation templates (NEW v2.8.0)
 │   ├── batch/             # Batch processing
 │   ├── branches/          # Conversation branching
 │   ├── context/           # Context management
@@ -49,7 +56,7 @@ ollama-cli/
 │   ├── indexing/          # Codebase indexing
 │   ├── testing/           # Test integration
 │   ├── workflows/         # Workflow automation
-│   ├── database/          # Database tools (SQLite)
+│   ├── database/          # Database tools (SQLite, PostgreSQL, MySQL) (v2.8.0)
 │   ├── rag/               # RAG system (vector embeddings)
 │   ├── setup/             # First-run setup & model verification
 │   ├── commands/          # Command handlers
@@ -59,7 +66,7 @@ ollama-cli/
 │   └── types/             # TypeScript type definitions
 ├── docs/                  # Documentation
 ├── dist/                  # Compiled output
-└── tests/                 # Test files (78 tests, vitest)
+└── tests/                 # Test files (200 tests, vitest)
 ```
 
 ## Tech Stack
@@ -68,11 +75,12 @@ ollama-cli/
 **Runtime:** Node.js 20+
 **Package Manager:** npm
 **CLI Framework:** Commander.js
-**Testing:** Vitest (78 passing tests)
-**Database:** better-sqlite3 (SQLite)
+**Testing:** Vitest (200 passing tests)
+**Database:** better-sqlite3 (SQLite), pg (PostgreSQL), mysql2 (MySQL)
 **HTTP:** Native fetch API
 **Terminal UI:** Chalk, gradient-string, ora
 **Code Quality:** ESLint, Prettier
+**Git Hooks:** Husky (pre-commit, pre-push)
 
 ## Architecture
 
@@ -89,15 +97,45 @@ ollama-cli/
 - **Agent System**: Markdown-based definitions with YAML frontmatter
 - **Configuration Hierarchy**: CLI flags → Env vars → Config file → Defaults
 
-## Recent Updates (v2.5.0 - 2026-01-02)
+## Recent Updates (v2.8.0 - 2026-01-02)
 
-### Base URL Configuration
-- Added interactive base URL prompt during first-run setup
-- Offers default (http://localhost:11434) or custom URL option
-- Validates URL format and tests connection before saving
-- Saves to `~/.ollama-cli/config.json` (no .env files needed)
-- Supports configuration management via `ollama-cli config` commands
-- Priority: OLLAMA_BASE_URL env → config.json → default
+### Session Analytics System
+- Comprehensive usage tracking for sessions, messages, tools, and commands
+- Analytics dashboard with overview, tool reports, and session reports
+- Success rate monitoring and error analysis
+- Token usage estimation and peak hour detection
+- Storage in `~/.ollama-cli/analytics.json` (automatically managed)
+- Commands: `analytics overview|tools|session|clear`
+
+### Code Generation Templates
+- Express.js API generator with TypeScript/JavaScript support
+- JWT authentication generator with bcrypt and middleware
+- REST endpoint scaffolding (GET, POST, PUT, DELETE)
+- Optional Joi validation schema generation
+- Generator registry for discovering available templates
+- Commands: `generate list|api|auth|crud|model|test|component`
+
+### Smart Caching Layer
+- SHA-256 hash-based cache keys for integrity
+- TTL support with configurable expiration (default: 7 days)
+- LRU eviction strategy with hit count prioritization
+- Size limits: 100MB max, 1000 entries
+- Auto-cleanup runs every 24 hours
+- Cache statistics and monitoring
+
+### Database Support
+- PostgreSQL client with schema introspection
+- MySQL client with full query support
+- Optional dependencies with lazy loading
+- Connection management and transaction support
+- Schema inspection: tables, columns, indexes, foreign keys
+- Requires `pg` for PostgreSQL, `mysql2` for MySQL
+
+### Testing & Quality
+- Added 78 new tests (total: 200 passing tests)
+- Pre-push git hook ensures all tests pass before push
+- Comprehensive test coverage for all new features
+- Integration tests for generators and analytics
 
 **Implementation:**
 - `src/setup/index.ts` - `promptForBaseUrl()`, `testOllamaConnection()`

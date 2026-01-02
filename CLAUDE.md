@@ -645,6 +645,212 @@ const rendered = renderPrompt(prompt, vars);
 **Search:**
 Searches across: name, content, description, category, and tags (case-insensitive).
 
+## Productivity & Scale Systems (v2.8.0)
+
+### Session Analytics System
+
+**Location:** `src/analytics/`
+
+Comprehensive usage tracking and insights for sessions, tools, commands, and errors.
+
+**Architecture:**
+- `tracker.ts` - Event tracking with trackSessionStart, trackMessageSent, trackToolExecution, etc.
+- `reports.ts` - Report generation with generateUsageStats, generateToolReport, generateSessionReport
+- `index.ts` - Barrel export file
+
+**Storage:** `~/.ollama-cli/analytics.json`
+
+**Event Types:**
+```typescript
+type EventType =
+  | 'session:start'
+  | 'session:end'
+  | 'message:sent'
+  | 'message:received'
+  | 'tool:executed'
+  | 'tool:error'
+  | 'command:executed'
+  | 'error:occurred';
+```
+
+**Key Functions:**
+- `trackSessionStart(sessionId, model, assistant, agent)` - Track session start
+- `trackSessionEnd(sessionId)` - Track session end
+- `trackMessageSent(sessionId, messageLength, tokens)` - Track user messages
+- `trackMessageReceived(sessionId, messageLength, tokens)` - Track AI responses
+- `trackToolExecution(sessionId, toolName, duration, success)` - Track tool usage
+- `trackCommand(sessionId, command)` - Track REPL commands
+- `trackError(sessionId, errorType, message)` - Track errors
+- `generateUsageStats(filter?)` - Generate comprehensive usage statistics
+- `generateToolReport(toolName)` - Get tool-specific analytics
+- `generateSessionReport(sessionId)` - Get session-level report
+
+**Integration:**
+Analytics tracking is integrated transparently into `src/commands/chat-enhanced.ts`:
+```typescript
+await trackSessionStart(session.id, model, options.assistant, agentName);
+await trackMessageSent(session.id, userMessage.length, estimatedTokens);
+await trackToolExecution(session.id, toolName, duration, success);
+```
+
+**CLI Commands:**
+```bash
+ollama-cli analytics overview              # Usage overview
+ollama-cli analytics tools read_file       # Tool report
+ollama-cli analytics session <id>          # Session report
+ollama-cli analytics clear                 # Clear analytics
+```
+
+### Code Generation System
+
+**Location:** `src/generators/`
+
+Template-based code scaffolding for Express.js applications.
+
+**Architecture:**
+- `templates/express-api.ts` - REST API generator (TypeScript/JavaScript)
+- `templates/express-auth.ts` - JWT authentication generator
+- `registry.ts` - Generator discovery and filtering
+- `index.ts` - Barrel exports
+
+**Generator Configuration:**
+```typescript
+interface GeneratorConfig {
+  type: GeneratorType;              // 'api' | 'auth' | 'crud' | 'model' | 'test'
+  framework: Framework;             // 'express' | 'nest' | 'fastify'
+  language: Language;               // 'typescript' | 'javascript'
+  name: string;                     // Resource name (e.g., 'User')
+  outputPath?: string;              // Output directory
+  options?: {
+    methods?: string[];             // ['GET', 'POST', 'PUT', 'DELETE']
+    auth?: boolean;                 // Include auth middleware
+    validation?: boolean;           // Include Joi validation
+    authType?: 'jwt' | 'session';  // Auth strategy
+  };
+}
+```
+
+**Key Functions:**
+- `generateExpressAPI(config)` - Generate REST API endpoints
+- `generateExpressAuth(config)` - Generate JWT authentication
+- `findGenerator(type, framework, language)` - Find specific generator
+- `getAllGenerators()` - List all available generators
+- `getGeneratorsByType(type)` - Filter by generator type
+- `getGeneratorsByFramework(framework)` - Filter by framework
+
+**Generated Files:**
+API Generator creates:
+- `src/routes/{resource}.ts` - Express router with endpoints
+- `src/controllers/{resource}.ts` - Business logic handlers
+- `src/validators/{resource}.ts` - Joi validation schemas (optional)
+
+Auth Generator creates:
+- `src/middleware/auth.ts` - JWT verification middleware
+- `src/controllers/auth.ts` - Login/register/me handlers
+- `src/routes/auth.ts` - Auth endpoints
+
+**CLI Commands:**
+```bash
+ollama-cli generate list                   # List generators
+ollama-cli generate api User               # Generate REST API
+ollama-cli generate auth                   # Generate JWT auth
+```
+
+### Smart Caching Layer
+
+**Location:** `src/cache/index.ts`
+
+High-performance caching with SHA-256 hashing and LRU eviction.
+
+**Cache Entry Structure:**
+```typescript
+interface CacheEntry {
+  key: string;                    // SHA-256 hash
+  value: string;                  // Cached content
+  metadata: CacheMetadata;        // Original metadata
+  createdAt: string;             // Creation timestamp
+  expiresAt: string;             // Expiration timestamp
+  hits: number;                   // Access count
+}
+```
+
+**Storage:** `~/.ollama-cli/cache/cache-store.json`
+
+**Key Functions:**
+- `generateCacheKey(metadata)` - Generate SHA-256 hash key
+- `getCache(metadata)` - Retrieve cached value
+- `setCache(metadata, value, options)` - Store value with TTL
+- `invalidateCache(metadata)` - Remove specific entry
+- `clearCache()` - Clear all entries
+- `getCacheStats()` - Get hit rates and storage info
+- `enforceLimits()` - LRU eviction when over limits
+
+**Configuration:**
+- Default TTL: 7 days
+- Max size: 100MB
+- Max entries: 1000
+- Auto-cleanup interval: 24 hours
+
+**LRU Eviction:**
+When limits exceeded, removes entries with:
+1. Lowest hit count
+2. Oldest creation time
+3. Until under limits
+
+### Database Support
+
+**Location:** `src/database/`
+
+Database clients for PostgreSQL and MySQL with optional dependencies.
+
+**PostgreSQL Client (`postgres.ts`):**
+```typescript
+interface PostgresClient {
+  query(sql: string, params?: unknown[]): Promise<QueryResult>;
+  getSchema(): Promise<SchemaInfo>;
+  getTableInfo(tableName: string): Promise<TableInfo>;
+  close(): Promise<void>;
+}
+```
+
+**MySQL Client (`mysql.ts`):**
+```typescript
+interface MySQLClient {
+  query(sql: string, params?: unknown[]): Promise<QueryResult>;
+  getSchema(): Promise<SchemaInfo>;
+  getTableInfo(tableName: string): Promise<TableInfo>;
+  close(): Promise<void>;
+}
+```
+
+**Key Functions:**
+- `createPostgresClient(config)` - Create PostgreSQL connection
+- `createMySQLClient(config)` - Create MySQL connection
+- Both support: query execution, schema introspection, transaction handling
+
+**Connection Configuration:**
+```typescript
+{
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+}
+```
+
+**Schema Inspection:**
+Returns comprehensive schema information:
+- Tables with columns (name, type, nullable, default)
+- Indexes (name, columns, unique)
+- Foreign keys (constraint, referencing table/column)
+- Row counts per table
+
+**Optional Dependencies:**
+- PostgreSQL requires: `npm install pg`
+- MySQL requires: `npm install mysql2`
+- Lazy loading with helpful error messages if not installed
+
 ## Common Patterns
 
 ### Adding a new tool:
